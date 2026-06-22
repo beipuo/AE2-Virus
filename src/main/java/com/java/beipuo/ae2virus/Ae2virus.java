@@ -1,5 +1,8 @@
 package com.java.beipuo.ae2virus;
 
+import com.java.beipuo.ae2virus.infection.AVGridServices;
+import com.java.beipuo.ae2virus.network.AVNetwork;
+import com.java.beipuo.ae2virus.registry.AVRegistries;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -14,6 +17,9 @@ public class Ae2virus {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public Ae2virus(IEventBus modEventBus, ModContainer modContainer) {
+        AVGridServices.register();
+        AVRegistries.register(modEventBus);
+        modEventBus.addListener(AVNetwork::register);
         modEventBus.addListener(this::commonSetup);
     }
 

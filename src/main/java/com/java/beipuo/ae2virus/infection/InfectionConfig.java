@@ -1,0 +1,53 @@
+package com.java.beipuo.ae2virus.infection;
+
+public record InfectionConfig(
+        double minAttemptChance,
+        double maxAttemptChance,
+        double targetedItemCountScale,
+        double broadTagItemCountScale,
+        double broadDiskUsedBytesScale,
+        double broadDriveInfectedDiskCountScale,
+        double broadTagWeight,
+        double broadDiskWeight,
+        double broadDriveWeight,
+        double broadTargetedVirusCountScale,
+        double broadTargetedVirusWeight,
+        double systemicTotalBytesScale,
+        double systemicTotalBytesWeight,
+        double systemicBroadVirusCountScale,
+        double systemicBroadVirusWeight,
+        double polymorphicBlacklistCountScale,
+        double cableFaceWeight,
+        double wirelessRangeWeight,
+        double exposureScale,
+        double maxSuccessChance,
+        int riskCheckIntervalTicks,
+        int maxRiskChecksPerTick,
+        int maxCandidatesPerRefresh) {
+    public static InfectionConfig defaults() {
+        return new InfectionConfig(
+                0.0001,
+                0.05,
+                4096.0,
+                8192.0,
+                16384.0,
+                3.0,
+                0.5,
+                0.25,
+                0.25,
+                4.0,
+                0.35,
+                65536.0,
+                0.7,
+                3.0,
+                0.5,
+                512.0,
+                1.0,
+                4.0,
+                32.0,
+                0.75,
+                20 * 20,
+                4,
+                256);
+    }
+}
