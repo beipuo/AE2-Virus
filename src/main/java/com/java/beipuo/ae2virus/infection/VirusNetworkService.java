@@ -107,14 +107,17 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     public int debugAddVirusAndInfect(VirusClass virusClass) {
         refreshStats();
         int visibleBefore = currentVisibleInfectedKeys().size();
-        this.riskCache.addVirus(virusClass);
-
-        Set<AEKey> infectedKeys = this.infectedKeysByClass.get(virusClass);
         if (virusClass == VirusClass.BROAD_SPECTRUM) {
-            activateDebugBroadSpectrumTarget();
+            runTagBroadSpectrumRiskCheck();
+            return Math.max(0, currentVisibleInfectedKeys().size() - visibleBefore);
         }
+
+        this.riskCache.addVirus(virusClass);
+        Set<AEKey> infectedKeys = this.infectedKeysByClass.get(virusClass);
         for (AEKey key : debugInfectionTargets(virusClass)) {
-            infectedKeys.add(key);
+            if (canBeInfectedBy(virusClass, key)) {
+                infectedKeys.add(key);
+            }
         }
         markInfectionChanged();
         return Math.max(0, currentVisibleInfectedKeys().size() - visibleBefore);
@@ -178,6 +181,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 }
                 targetTag.putLong("disk", target.diskId());
                 targetTag.putLong("drive", target.driveId());
+                targetTag.putInt("targetedSeedTypes", target.targetedSeedTypes());
                 broadTargets.add(targetTag);
             }
             savedData.put(TAG_BROAD_SPECTRUM_TARGETS, broadTargets);
@@ -186,16 +190,25 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
     @Override
     public boolean isInfected(AEKey key) {
-        if (isDirectlyInfected(key)) {
+        if (isDirectlyInfectedBy(VirusClass.POLYMORPHIC, key) && canBeInfectedBy(VirusClass.POLYMORPHIC, key)) {
+            return true;
+        }
+        if (isBlacklistedKey(key)) {
+            return false;
+        }
+        if (isDirectlyInfectedBy(VirusClass.SYSTEMIC, key) && canBeInfectedBy(VirusClass.SYSTEMIC, key)) {
+            return true;
+        }
+        if (isActiveSystemicInfection(key)) {
+            return true;
+        }
+        if (isDirectlyInfectedBy(VirusClass.BROAD_SPECTRUM, key) && canBeInfectedBy(VirusClass.BROAD_SPECTRUM, key)) {
             return true;
         }
         if (isActiveBroadSpectrumInfection(key)) {
             return true;
         }
-        if (isVirusClassActive(VirusClass.SYSTEMIC) && key instanceof AEItemKey) {
-            return true;
-        }
-        return isVirusClassActive(VirusClass.POLYMORPHIC) && isNetherStarKey(key);
+        return isDirectlyInfectedBy(VirusClass.TARGETED, key) && canBeInfectedBy(VirusClass.TARGETED, key);
     }
 
     private boolean isDirectlyInfected(AEKey key) {
@@ -205,6 +218,10 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             }
         }
         return false;
+    }
+
+    private boolean isDirectlyInfectedBy(VirusClass virusClass, AEKey key) {
+        return this.infectedKeysByClass.get(virusClass).contains(key);
     }
 
     @Override
@@ -253,7 +270,8 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private void runTargetedRiskCheck() {
-        List<AEKey> targetedCandidates = this.riskCache.candidates(VirusClass.TARGETED);
+        List<AEKey> targetedCandidates = infectionCandidates(VirusClass.TARGETED,
+                this.riskCache.candidates(VirusClass.TARGETED));
         if (targetedCandidates.isEmpty()) {
             return;
         }
@@ -279,25 +297,28 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private void runBroadSpectrumRiskCheck() {
-        InfectionTarget.BroadSpectrumTarget target = chooseBroadSpectrumTarget();
-        if (target == null) {
+        BroadSpectrumChoice choice = chooseBroadSpectrumChoice();
+        runBroadSpectrumChoice(choice);
+    }
+
+    private void runTagBroadSpectrumRiskCheck() {
+        BroadSpectrumChoice choice = weightedBroadSpectrumChoice(tagBroadSpectrumChoices());
+        runBroadSpectrumChoice(choice);
+    }
+
+    private void runBroadSpectrumChoice(BroadSpectrumChoice choice) {
+        if (choice == null) {
             return;
         }
 
-        InfectionRoll roll = InfectionRisk.roll(
-                VirusClass.BROAD_SPECTRUM,
-                target,
-                this.riskCache,
-                this.riskCache.exposureStats(),
-                this.random,
-                this.config);
-        if (roll.result() != InfectionRoll.Result.SUCCESS) {
+        double success = InfectionRisk.successChance(this.riskCache.exposureStats(), this.config);
+        if (this.random.nextDouble() >= success) {
             return;
         }
 
         boolean changed = false;
-        this.activeBroadSpectrumTargets.add(target);
-        List<AEKey> affectedKeys = broadSpectrumCandidatesForTarget(target);
+        activateBroadSpectrumTarget(choice.target());
+        List<AEKey> affectedKeys = broadSpectrumCandidatesForTarget(choice.target());
         for (AEKey key : affectedKeys) {
             changed |= infect(VirusClass.BROAD_SPECTRUM, key);
         }
@@ -306,7 +327,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private void runSystemicRiskCheck() {
-        List<AEKey> systemicCandidates = this.riskCache.candidates(VirusClass.SYSTEMIC);
+        List<AEKey> systemicCandidates = systemicCandidates();
         if (systemicCandidates.isEmpty()) {
             return;
         }
@@ -333,7 +354,8 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private void runPolymorphicRiskCheck() {
-        List<AEKey> polymorphicCandidates = this.riskCache.candidates(VirusClass.POLYMORPHIC);
+        List<AEKey> polymorphicCandidates = infectionCandidates(VirusClass.POLYMORPHIC,
+                this.riskCache.candidates(VirusClass.POLYMORPHIC));
         if (polymorphicCandidates.isEmpty()) {
             return;
         }
@@ -361,10 +383,11 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
     private List<AEKey> debugInfectionTargets(VirusClass virusClass) {
         return switch (virusClass) {
-            case TARGETED -> randomSingleTarget(this.riskCache.candidates(VirusClass.TARGETED));
-            case BROAD_SPECTRUM -> broadSpectrumCandidatesForTarget(debugBroadSpectrumTarget());
-            case SYSTEMIC -> this.riskCache.candidates(VirusClass.SYSTEMIC);
-            case POLYMORPHIC -> netherStarTargets();
+            case TARGETED -> randomSingleTarget(infectionCandidates(VirusClass.TARGETED,
+                    this.riskCache.candidates(VirusClass.TARGETED)));
+            case BROAD_SPECTRUM -> List.of();
+            case SYSTEMIC -> systemicCandidates();
+            case POLYMORPHIC -> infectionCandidates(VirusClass.POLYMORPHIC, netherStarTargets());
         };
     }
 
@@ -383,53 +406,85 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         return List.of(key);
     }
 
-    private InfectionTarget.BroadSpectrumTarget chooseBroadSpectrumTarget() {
-        List<InfectionTarget.BroadSpectrumTarget> candidates = new ArrayList<>();
+    private BroadSpectrumChoice chooseBroadSpectrumChoice() {
+        List<BroadSpectrumChoice> choices = new ArrayList<>();
 
-        ResourceLocation tagId = strongestCompleteTag();
-        if (tagId != null) {
-            candidates.add(InfectionTarget.BroadSpectrumTarget.tag(tagId));
-        }
+        choices.addAll(tagBroadSpectrumChoices());
         long diskId = this.riskCache.strongestDiskId();
         if (this.riskCache.diskUsedBytes(diskId) > 0) {
-            candidates.add(InfectionTarget.BroadSpectrumTarget.disk(diskId));
+            addBroadSpectrumChoice(choices, InfectionTarget.BroadSpectrumTarget.disk(diskId));
         }
         long driveId = this.riskCache.strongestDriveId();
         if (this.riskCache.infectedDiskCount(driveId) > 0) {
-            candidates.add(InfectionTarget.BroadSpectrumTarget.drive(driveId));
+            addBroadSpectrumChoice(choices, InfectionTarget.BroadSpectrumTarget.drive(driveId));
         }
 
-        candidates.removeIf(this.activeBroadSpectrumTargets::contains);
-        if (candidates.isEmpty()) {
+        if (choices.isEmpty()) {
             return null;
         }
-        return candidates.get(this.random.nextInt(candidates.size()));
+        return weightedBroadSpectrumChoice(choices);
     }
 
-    private ResourceLocation strongestCompleteTag() {
-        return this.riskCache.strongestCompleteTag();
-    }
+    private List<BroadSpectrumChoice> tagBroadSpectrumChoices() {
+        List<BroadSpectrumChoice> choices = new ArrayList<>();
+        for (ResourceLocation tagId : this.riskCache.tagIds()) {
+            int targetedSeedTypes = targetedSeedTypesInTag(tagId);
+            if (targetedSeedTypes <= 0) {
+                continue;
+            }
 
-    private InfectionTarget.BroadSpectrumTarget debugBroadSpectrumTarget() {
-        ResourceLocation tagId = this.riskCache.hasEveryItemInTag(INGOTS_TAG_ID)
-                ? INGOTS_TAG_ID
-                : this.riskCache.strongestTagInFamily(INGOTS_TAG_ID);
-        if (tagId != null) {
-            return InfectionTarget.BroadSpectrumTarget.tag(tagId);
+            addBroadSpectrumChoice(choices, InfectionTarget.BroadSpectrumTarget.tag(tagId, targetedSeedTypes));
         }
-        return InfectionTarget.BroadSpectrumTarget.disk(InfectionTarget.BroadSpectrumTarget.NETWORK_DISK_ID);
+        return choices;
     }
 
-    private void activateDebugBroadSpectrumTarget() {
-        this.activeBroadSpectrumTargets.add(debugBroadSpectrumTarget());
+    private void addBroadSpectrumChoice(List<BroadSpectrumChoice> choices, InfectionTarget.BroadSpectrumTarget target) {
+        if (isBroadSpectrumTargetActive(target)) {
+            return;
+        }
+
+        double chance = InfectionRisk.attemptChance(VirusClass.BROAD_SPECTRUM, target, this.riskCache, this.config);
+        if (chance > 0.0) {
+            choices.add(new BroadSpectrumChoice(target, chance));
+        }
+    }
+
+    private BroadSpectrumChoice weightedBroadSpectrumChoice(List<BroadSpectrumChoice> choices) {
+        double totalWeight = 0.0;
+        for (BroadSpectrumChoice choice : choices) {
+            totalWeight += choice.attemptChance();
+        }
+
+        if (totalWeight <= 0.0) {
+            return null;
+        }
+
+        double roll = this.random.nextDouble() * totalWeight;
+        for (BroadSpectrumChoice choice : choices) {
+            roll -= choice.attemptChance();
+            if (roll <= 0.0) {
+                return choice;
+            }
+        }
+        return choices.getLast();
+    }
+
+    private int targetedSeedTypesInTag(ResourceLocation tagId) {
+        int seedTypes = 0;
+        for (AEKey key : this.infectedKeysByClass.get(VirusClass.TARGETED)) {
+            if (isKeyInTag(key, tagId)) {
+                seedTypes++;
+            }
+        }
+        return seedTypes;
     }
 
     private List<AEKey> broadSpectrumCandidatesForTarget(InfectionTarget.BroadSpectrumTarget target) {
-        return switch (target.broadVariant()) {
+        return infectionCandidates(VirusClass.BROAD_SPECTRUM, switch (target.broadVariant()) {
             case TAG -> target.tagId() == null ? List.of() : this.riskCache.candidatesForTag(target.tagId());
             case DISK -> this.riskCache.candidatesForDisk(target.diskId());
             case DRIVE -> this.riskCache.candidatesForDrive(target.driveId());
-        };
+        });
     }
 
     private boolean isVirusClassActive(VirusClass virusClass) {
@@ -499,13 +554,15 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
             InfectionTarget.BroadSpectrumTarget target = switch (variant) {
                 case TAG -> targetTag.contains("tag", Tag.TAG_STRING)
-                        ? InfectionTarget.BroadSpectrumTarget.tag(ResourceLocation.parse(targetTag.getString("tag")))
+                        ? InfectionTarget.BroadSpectrumTarget.tag(
+                                ResourceLocation.parse(targetTag.getString("tag")),
+                                targetTag.getInt("targetedSeedTypes"))
                         : null;
                 case DISK -> InfectionTarget.BroadSpectrumTarget.disk(targetTag.getLong("disk"));
                 case DRIVE -> InfectionTarget.BroadSpectrumTarget.drive(targetTag.getLong("drive"));
             };
             if (target != null) {
-                changed |= this.activeBroadSpectrumTargets.add(target);
+                changed |= activateBroadSpectrumTarget(target);
             }
         }
         if (changed) {
@@ -530,13 +587,20 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private boolean infect(VirusClass virusClass, AEKey key) {
+        if (!canBeInfectedBy(virusClass, key)) {
+            return false;
+        }
         return this.infectedKeysByClass.get(virusClass).add(key);
     }
 
     private Set<AEKey> currentVisibleInfectedKeys() {
         Set<AEKey> result = new HashSet<>();
         for (Set<AEKey> infectedKeys : this.infectedKeysByClass.values()) {
-            result.addAll(infectedKeys);
+            for (AEKey key : infectedKeys) {
+                if (isInfected(key)) {
+                    result.add(key);
+                }
+            }
         }
         if (isVirusClassActive(VirusClass.BROAD_SPECTRUM)
                 || isVirusClassActive(VirusClass.SYSTEMIC)
@@ -555,6 +619,9 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         if (!isVirusClassActive(VirusClass.BROAD_SPECTRUM)) {
             return false;
         }
+        if (!canBeInfectedBy(VirusClass.BROAD_SPECTRUM, key)) {
+            return false;
+        }
 
         for (InfectionTarget.BroadSpectrumTarget target : this.activeBroadSpectrumTargets) {
             if (matchesBroadSpectrumTarget(key, target)) {
@@ -562,6 +629,10 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             }
         }
         return false;
+    }
+
+    private boolean isActiveSystemicInfection(AEKey key) {
+        return isVirusClassActive(VirusClass.SYSTEMIC) && canBeInfectedBy(VirusClass.SYSTEMIC, key);
     }
 
     private boolean matchesBroadSpectrumTarget(AEKey key, InfectionTarget.BroadSpectrumTarget target) {
@@ -581,7 +652,38 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 .anyMatch(tag -> tag.location().equals(tagId));
     }
 
-    private static boolean isNetherStarKey(AEKey key) {
+    private boolean canBeInfectedBy(VirusClass virusClass, AEKey key) {
+        boolean blacklisted = isBlacklistedKey(key);
+        return switch (virusClass) {
+            case TARGETED -> key instanceof AEItemKey && !blacklisted;
+            case BROAD_SPECTRUM -> !blacklisted && isDirectlyInfectedBy(VirusClass.TARGETED, key);
+            case SYSTEMIC -> !blacklisted && (isDirectlyInfectedBy(VirusClass.BROAD_SPECTRUM, key)
+                    || isActiveBroadSpectrumInfection(key));
+            case POLYMORPHIC -> blacklisted;
+        };
+    }
+
+    private List<AEKey> systemicCandidates() {
+        List<AEKey> result = new ArrayList<>();
+        for (AEKey key : this.riskCache.candidates(VirusClass.SYSTEMIC)) {
+            if (canBeInfectedBy(VirusClass.SYSTEMIC, key)) {
+                result.add(key);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private List<AEKey> infectionCandidates(VirusClass virusClass, List<AEKey> candidates) {
+        List<AEKey> result = new ArrayList<>();
+        for (AEKey key : candidates) {
+            if (canBeInfectedBy(virusClass, key)) {
+                result.add(key);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean isBlacklistedKey(AEKey key) {
         return key instanceof AEItemKey itemKey && itemKey.getItem() == Items.NETHER_STAR;
     }
 
@@ -664,6 +766,30 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     private boolean isActiveDiskTarget(long diskId) {
         return this.activeBroadSpectrumTargets.stream()
                 .anyMatch(target -> target.broadVariant() == BroadSpectrumVariant.DISK && target.diskId() == diskId);
+    }
+
+    private boolean activateBroadSpectrumTarget(InfectionTarget.BroadSpectrumTarget target) {
+        if (isBroadSpectrumTargetActive(target)) {
+            return false;
+        }
+        return this.activeBroadSpectrumTargets.add(target);
+    }
+
+    private boolean isBroadSpectrumTargetActive(InfectionTarget.BroadSpectrumTarget target) {
+        return this.activeBroadSpectrumTargets.stream()
+                .anyMatch(active -> sameBroadSpectrumTarget(active, target));
+    }
+
+    private static boolean sameBroadSpectrumTarget(InfectionTarget.BroadSpectrumTarget left,
+            InfectionTarget.BroadSpectrumTarget right) {
+        if (left.broadVariant() != right.broadVariant()) {
+            return false;
+        }
+        return switch (left.broadVariant()) {
+            case TAG -> left.tagId() != null && left.tagId().equals(right.tagId());
+            case DISK -> left.diskId() == right.diskId();
+            case DRIVE -> left.driveId() == right.driveId();
+        };
     }
 
     private static long contextId(ResourceLocation dimension, BlockPos pos, int slot) {
@@ -771,5 +897,8 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         private TickBudget(long gameTime) {
             this.gameTime = gameTime;
         }
+    }
+
+    private record BroadSpectrumChoice(InfectionTarget.BroadSpectrumTarget target, double attemptChance) {
     }
 }

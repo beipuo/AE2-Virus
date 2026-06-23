@@ -17,6 +17,7 @@ public final class AVCreativeTabs {
             .displayItems((parameters, output) -> {
                 AVItems.ITEMS.getEntries().stream()
                         .filter(item -> !AVItems.DEBUG_ITEMS.contains(item))
+                        .filter(item -> !AVItems.VIRUS_INFO_ITEMS.contains(item))
                         .forEach(item -> output.accept(item.value()));
             })
             .build());

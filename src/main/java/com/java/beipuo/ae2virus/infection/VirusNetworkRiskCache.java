@@ -13,10 +13,8 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
+import java.util.Set;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -186,18 +184,6 @@ public final class VirusNetworkRiskCache {
         return strongest;
     }
 
-    public ResourceLocation strongestCompleteTag() {
-        ResourceLocation strongest = null;
-        long strongestAmount = 0L;
-        for (var entry : this.tagItemCounts.object2LongEntrySet()) {
-            if (entry.getLongValue() > strongestAmount && hasEveryItemInTag(entry.getKey())) {
-                strongest = entry.getKey();
-                strongestAmount = entry.getLongValue();
-            }
-        }
-        return strongest;
-    }
-
     public ResourceLocation strongestTagInFamily(ResourceLocation rootTagId) {
         ResourceLocation strongest = null;
         long strongestAmount = 0L;
@@ -215,6 +201,10 @@ public final class VirusNetworkRiskCache {
         return keys == null ? List.of() : List.copyOf(keys);
     }
 
+    public Set<ResourceLocation> tagIds() {
+        return Set.copyOf(this.tagCandidates.keySet());
+    }
+
     public List<AEKey> candidatesForTagFamily(ResourceLocation rootTagId) {
         List<AEKey> result = new ArrayList<>();
         for (Map.Entry<ResourceLocation, List<AEKey>> entry : this.tagCandidates.entrySet()) {
@@ -228,27 +218,6 @@ public final class VirusNetworkRiskCache {
             }
         }
         return List.copyOf(result);
-    }
-
-    public boolean hasEveryItemInTag(ResourceLocation tagId) {
-        var tagKey = TagKey.create(Registries.ITEM, tagId);
-        var tag = BuiltInRegistries.ITEM.getTag(tagKey);
-        if (tag.isEmpty()) {
-            return false;
-        }
-
-        boolean hasAnyItem = false;
-        for (var holder : tag.get()) {
-            Item item = holder.value();
-            if (item == Items.AIR) {
-                continue;
-            }
-            hasAnyItem = true;
-            if (this.itemCounts.getLong(item) <= 0) {
-                return false;
-            }
-        }
-        return hasAnyItem;
     }
 
     public long diskUsedBytes(long diskId) {

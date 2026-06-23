@@ -82,11 +82,11 @@ public final class InfectionRisk {
 
     private static double tagBroadPressure(InfectionTarget.BroadSpectrumTarget target, VirusNetworkRiskCache cache,
             InfectionConfig config, double targetedVirusPressure) {
-        if (target.tagId() == null || !cache.hasEveryItemInTag(target.tagId())) {
+        if (target.tagId() == null || target.targetedSeedTypes() <= 0) {
             return 0.0;
         }
 
-        double tagPressure = cache.tagItemCount(target.tagId()) / config.broadTagItemCountScale();
+        double tagPressure = target.targetedSeedTypes() / config.broadTagItemCountScale();
         return tagPressure * config.broadTagWeight()
                 + targetedVirusPressure * config.broadTargetedVirusWeight();
     }
