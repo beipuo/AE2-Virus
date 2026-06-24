@@ -15,5 +15,7 @@ public interface IVirusNetworkService extends IGridService {
 
     long allowedExtraction(AEKey key, long requestedAmount);
 
+    void stimulateViruses(int durationTicks);
+
     int getInfectionVersion();
 }

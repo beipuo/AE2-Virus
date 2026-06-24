@@ -40,6 +40,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     private final Set<IGridNode> trackedNodes = new HashSet<>();
     private VirusNetworkStats stats = VirusNetworkStats.EMPTY;
     private int ticksUntilRiskCheck;
+    private int stimulationTicks;
     private int infectionVersion;
 
     public VirusNetworkService(IGrid grid, IStorageService storageService) {
@@ -54,6 +55,10 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     public void onLevelEndTick(Level level) {
         if (this.trackedNodes.isEmpty() || !isNetworkInLevel(level)) {
             return;
+        }
+
+        if (this.stimulationTicks > 0) {
+            this.stimulationTicks--;
         }
 
         if (this.ticksUntilRiskCheck > 0) {
@@ -124,6 +129,12 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     @Override
+    public void stimulateViruses(int durationTicks) {
+        this.stimulationTicks = Math.max(this.stimulationTicks, durationTicks);
+        this.ticksUntilRiskCheck = 0;
+    }
+
+    @Override
     public void saveNodeData(IGridNode gridNode, CompoundTag savedData) {
         if (this.t1Viruses.isEmpty()) {
             savedData.remove(TAG_T1_VIRUSES);
@@ -186,7 +197,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
         InfectionRoll roll = InfectionRisk.roll(
                 InfectionRisk.t1AttemptChance(storedAmount(target), this.config),
-                this.riskCache.exposureStats(),
+                activeExposureStats(),
                 this.random,
                 this.config);
         if (roll.result() != InfectionRoll.Result.SUCCESS) {
@@ -231,7 +242,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             return false;
         }
         long room = storedAmount - virus.blockedAmount();
-        long growth = InfectionRisk.spreadGrowthAmount(virus.blockedAmount(), virus.level(), this.config);
+        long growth = spreadGrowthAmount(virus.blockedAmount(), virus.level());
         return virus.addBlockedAmount(Math.min(room, growth));
     }
 
@@ -406,11 +417,10 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
 
         long room = storedAmount - currentBlocked;
-        long growth = InfectionRisk.spreadGrowthAmount(Math.max(1L, virus.totalBlockedAmount()), virus.level(),
-                this.config);
+        long growth = spreadGrowthAmount(Math.max(1L, virus.totalBlockedAmount()), virus.level());
         InfectionRoll roll = InfectionRisk.roll(
                 InfectionRisk.t2InfectionAttemptChance(Math.max(1, virus.infectedTargetCount() + 1), this.config),
-                this.riskCache.exposureStats(),
+                activeExposureStats(),
                 this.random,
                 this.config);
         if (roll.result() != InfectionRoll.Result.SUCCESS) {
@@ -444,11 +454,38 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private int nextRiskCheckInterval() {
+        if (isStimulated()) {
+            return 1;
+        }
         int baseInterval = this.config.runtime().riskCheckIntervalTicks();
         long infectedAmount = t1InfectedAmount();
         int virusLevel = highestT1Level();
         int spreadInterval = InfectionRisk.spreadIntervalTicks(baseInterval, infectedAmount, virusLevel, this.config);
         return spreadInterval + this.random.nextInt(Math.max(1, spreadInterval / 4));
+    }
+
+    private long spreadGrowthAmount(long infectedAmount, int virusLevel) {
+        if (!isStimulated()) {
+            return InfectionRisk.spreadGrowthAmount(infectedAmount, virusLevel, this.config);
+        }
+        return Math.max(1L, (long) Math.floor(this.config.spread().maxSpeedMultiplier()));
+    }
+
+    private ExposureStats activeExposureStats() {
+        if (!isStimulated()) {
+            return this.riskCache.exposureStats();
+        }
+        return new ExposureStats(0, 0, boostedExposurePressure());
+    }
+
+    private double boostedExposurePressure() {
+        double maxSuccessChance = this.config.exposure().maxSuccessChance();
+        double clamped = Math.max(0.000001, Math.min(0.999999, maxSuccessChance));
+        return -Math.log(1.0 - clamped) * this.config.exposure().scale();
+    }
+
+    private boolean isStimulated() {
+        return this.stimulationTicks > 0;
     }
 
     private long t1InfectedAmount() {

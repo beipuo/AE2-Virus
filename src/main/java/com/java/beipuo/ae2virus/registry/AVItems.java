@@ -2,6 +2,7 @@ package com.java.beipuo.ae2virus.registry;
 
 import java.util.List;
 import appeng.items.parts.PartItem;
+import com.java.beipuo.ae2virus.item.VirusStimulatorItem;
 import com.java.beipuo.ae2virus.part.VirusTerminalPart;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -56,6 +57,9 @@ public final class AVItems {
     public static final DeferredItem<Item> AUTO_SCAN_MODULE = ITEMS.material("auto_scan_module");
     public static final DeferredItem<Item> AUTO_ANTIVIRUS_MODULE = ITEMS.material("auto_antivirus_module");
     public static final DeferredItem<Item> SAMPLE_RECOVERY_MODULE = ITEMS.material("sample_recovery_module");
+    public static final DeferredItem<VirusStimulatorItem> VIRUS_STIMULATOR = ITEMS.singleStack(
+            "virus_stimulator",
+            VirusStimulatorItem::new);
 
     public static final List<DeferredItem<? extends Item>> VIRUS_INFO_ITEMS = List.of(
             T1_BASIC_VIRUS,
