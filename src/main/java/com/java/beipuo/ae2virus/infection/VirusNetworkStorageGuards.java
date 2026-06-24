@@ -15,8 +15,8 @@ public final class VirusNetworkStorageGuards {
         SERVICES.put(storage, service);
     }
 
-    public static synchronized boolean blocksExtraction(MEStorage storage, AEKey key) {
+    public static synchronized long allowedExtraction(MEStorage storage, AEKey key, long requestedAmount) {
         IVirusNetworkService service = SERVICES.get(storage);
-        return service != null && service.isInfected(key);
+        return service == null ? requestedAmount : service.allowedExtraction(key, requestedAmount);
     }
 }

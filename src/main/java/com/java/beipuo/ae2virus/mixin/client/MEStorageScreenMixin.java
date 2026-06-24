@@ -20,7 +20,7 @@ public abstract class MEStorageScreenMixin {
         }
 
         GridInventoryEntry entry = repoSlot.getEntry();
-        if (entry != null && ClientVirusState.isInfected(entry.getWhat())) {
+        if (entry != null && ClientVirusState.blockedAmount(entry.getWhat()) > 0L) {
             guiGraphics.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, 0x99A0A0A0);
         }
     }

@@ -2,18 +2,16 @@ package com.java.beipuo.ae2virus.infection;
 
 import appeng.api.networking.IGridService;
 import appeng.api.stacks.AEKey;
-import java.util.Set;
+import java.util.List;
 
 public interface IVirusNetworkService extends IGridService {
     VirusNetworkStats getStats();
 
-    int debugAddVirusAndInfect(VirusClass virusClass);
+    List<T1VirusState> t1Viruses();
 
-    int debugRemoveVirusAndClear(VirusClass virusClass);
+    long blockedAmount(AEKey key);
 
-    boolean isInfected(AEKey key);
-
-    Set<AEKey> getInfectedKeys();
+    long allowedExtraction(AEKey key, long requestedAmount);
 
     int getInfectionVersion();
 }

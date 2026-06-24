@@ -5,8 +5,9 @@ import appeng.api.stacks.AEKey;
 import appeng.helpers.InventoryAction;
 import appeng.menu.me.common.MEStorageMenu;
 import com.java.beipuo.ae2virus.infection.IVirusNetworkService;
-import com.java.beipuo.ae2virus.network.packet.SyncInfectedKeysPacket;
+import com.java.beipuo.ae2virus.network.packet.SyncVirusInfoPacket;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -14,7 +15,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 @Mixin(MEStorageMenu.class)
 public abstract class MEStorageMenuMixin {
@@ -28,7 +28,7 @@ public abstract class MEStorageMenuMixin {
     public abstract IGridNode getGridNode();
 
     @Inject(method = "broadcastChanges", at = @At("TAIL"))
-    private void ae2virus$syncInfectedKeys(CallbackInfo ci) {
+    private void ae2virus$syncVirusInfo(CallbackInfo ci) {
         if (!(((MEStorageMenu) (Object) this).getPlayer() instanceof ServerPlayer player)) {
             return;
         }
@@ -43,7 +43,7 @@ public abstract class MEStorageMenuMixin {
         if (version != this.ae2virus$lastSyncedInfectionVersion || this.ae2virus$syncCooldown-- <= 0) {
             this.ae2virus$lastSyncedInfectionVersion = version;
             this.ae2virus$syncCooldown = 20;
-            PacketDistributor.sendToPlayer(player, new SyncInfectedKeysPacket(service.getInfectedKeys()));
+            PacketDistributor.sendToPlayer(player, SyncVirusInfoPacket.fromStates(service.t1Viruses()));
         }
     }
 
@@ -64,7 +64,7 @@ public abstract class MEStorageMenuMixin {
         }
 
         IVirusNetworkService service = node.getGrid().getService(IVirusNetworkService.class);
-        if (service.isInfected(clickedKey)) {
+        if (service.allowedExtraction(clickedKey, 1L) <= 0L) {
             ci.cancel();
         }
     }

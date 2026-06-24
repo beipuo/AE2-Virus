@@ -15,8 +15,11 @@ public abstract class NetworkStorageMixin {
     @Inject(method = "extract", at = @At("HEAD"), cancellable = true)
     private void ae2virus$blockInfectedNetworkExtraction(AEKey what, long amount, Actionable mode,
             IActionSource source, CallbackInfoReturnable<Long> cir) {
-        if (VirusNetworkStorageGuards.blocksExtraction((NetworkStorage) (Object) this, what)) {
+        long allowedAmount = VirusNetworkStorageGuards.allowedExtraction((NetworkStorage) (Object) this, what, amount);
+        if (allowedAmount <= 0) {
             cir.setReturnValue(0L);
+        } else if (allowedAmount < amount) {
+            cir.setReturnValue(((NetworkStorage) (Object) this).extract(what, allowedAmount, mode, source));
         }
     }
 }

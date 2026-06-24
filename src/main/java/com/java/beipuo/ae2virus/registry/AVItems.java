@@ -1,9 +1,8 @@
 package com.java.beipuo.ae2virus.registry;
 
-import com.java.beipuo.ae2virus.item.DebugVirusItem;
-import com.java.beipuo.ae2virus.item.DebugVirusCleanerItem;
-import com.java.beipuo.ae2virus.infection.VirusClass;
 import java.util.List;
+import appeng.items.parts.PartItem;
+import com.java.beipuo.ae2virus.part.VirusTerminalPart;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -16,6 +15,7 @@ public final class AVItems {
     public static final DeferredItem<BlockItem> VIRUS_ASSEMBLER = ITEMS.blockItem(AVBlocks.VIRUS_ASSEMBLER);
     public static final DeferredItem<BlockItem> VIRUS_BREEDER = ITEMS.blockItem(AVBlocks.VIRUS_BREEDER);
     public static final DeferredItem<BlockItem> NETWORK_ISOLATION_GATE = ITEMS.blockItem(AVBlocks.NETWORK_ISOLATION_GATE);
+    public static final DeferredItem<PartItem<VirusTerminalPart>> VIRUS_TERMINAL = AVParts.VIRUS_TERMINAL;
 
     public static final DeferredItem<Item> TARGETED_VIRUS_SHELL = ITEMS.material("targeted_virus_shell");
     public static final DeferredItem<Item> BROAD_SPECTRUM_VIRUS_SHELL = ITEMS.material("broad_spectrum_virus_shell");
@@ -56,34 +56,6 @@ public final class AVItems {
     public static final DeferredItem<Item> AUTO_SCAN_MODULE = ITEMS.material("auto_scan_module");
     public static final DeferredItem<Item> AUTO_ANTIVIRUS_MODULE = ITEMS.material("auto_antivirus_module");
     public static final DeferredItem<Item> SAMPLE_RECOVERY_MODULE = ITEMS.material("sample_recovery_module");
-
-    public static final DeferredItem<DebugVirusItem> DEBUG_TARGETED_VIRUS = ITEMS.singleStack("debug_targeted_virus",
-            properties -> new DebugVirusItem(VirusClass.TARGETED, properties));
-    public static final DeferredItem<DebugVirusItem> DEBUG_BROAD_SPECTRUM_VIRUS = ITEMS.singleStack("debug_broad_spectrum_virus",
-            properties -> new DebugVirusItem(VirusClass.BROAD_SPECTRUM, properties));
-    public static final DeferredItem<DebugVirusItem> DEBUG_SYSTEMIC_VIRUS = ITEMS.singleStack("debug_systemic_virus",
-            properties -> new DebugVirusItem(VirusClass.SYSTEMIC, properties));
-    public static final DeferredItem<DebugVirusItem> DEBUG_POLYMORPHIC_VIRUS = ITEMS.singleStack("debug_polymorphic_virus",
-            properties -> new DebugVirusItem(VirusClass.POLYMORPHIC, properties));
-
-    public static final DeferredItem<DebugVirusCleanerItem> DEBUG_TARGETED_VIRUS_CLEANER = ITEMS.singleStack("debug_targeted_virus_cleaner",
-            properties -> new DebugVirusCleanerItem(VirusClass.TARGETED, properties));
-    public static final DeferredItem<DebugVirusCleanerItem> DEBUG_BROAD_SPECTRUM_VIRUS_CLEANER = ITEMS.singleStack("debug_broad_spectrum_virus_cleaner",
-            properties -> new DebugVirusCleanerItem(VirusClass.BROAD_SPECTRUM, properties));
-    public static final DeferredItem<DebugVirusCleanerItem> DEBUG_SYSTEMIC_VIRUS_CLEANER = ITEMS.singleStack("debug_systemic_virus_cleaner",
-            properties -> new DebugVirusCleanerItem(VirusClass.SYSTEMIC, properties));
-    public static final DeferredItem<DebugVirusCleanerItem> DEBUG_POLYMORPHIC_VIRUS_CLEANER = ITEMS.singleStack("debug_polymorphic_virus_cleaner",
-            properties -> new DebugVirusCleanerItem(VirusClass.POLYMORPHIC, properties));
-
-    public static final List<DeferredItem<? extends Item>> DEBUG_ITEMS = List.of(
-            DEBUG_TARGETED_VIRUS,
-            DEBUG_BROAD_SPECTRUM_VIRUS,
-            DEBUG_SYSTEMIC_VIRUS,
-            DEBUG_POLYMORPHIC_VIRUS,
-            DEBUG_TARGETED_VIRUS_CLEANER,
-            DEBUG_BROAD_SPECTRUM_VIRUS_CLEANER,
-            DEBUG_SYSTEMIC_VIRUS_CLEANER,
-            DEBUG_POLYMORPHIC_VIRUS_CLEANER);
 
     public static final List<DeferredItem<? extends Item>> VIRUS_INFO_ITEMS = List.of(
             T1_BASIC_VIRUS,

@@ -6,40 +6,145 @@ public final class InfectionRisk {
     private InfectionRisk() {
     }
 
-    public static double attemptChance(VirusClass virusClass, InfectionTarget target,
-            VirusNetworkRiskCache cache, InfectionConfig config) {
-        double pressure = pressure(virusClass, target, cache, config);
-        if (pressure <= 0.0) {
-            return 0.0;
-        }
-
-        double normalized = ProbabilityCurves.expSaturation(pressure);
-        return clamp(
-                config.minAttemptChance() + normalized * (config.maxAttemptChance() - config.minAttemptChance()),
-                0.0,
-                config.maxAttemptChance());
+    public static ExposureChances exposureChances(ExposureStats exposure, InfectionConfig config) {
+        InfectionConfig.Exposure exposureConfig = config.exposure();
+        double cablePressure = exposure.exposedCableFaces() * exposureConfig.cableFaceWeight();
+        double machinePressure = exposure.machineExposureWeight();
+        double wirelessPressure = exposure.wirelessRangeExposures() * exposureConfig.wirelessRangeWeight();
+        double cableChance = exposureChance(cablePressure, config);
+        double machineChance = exposureChance(machinePressure, config);
+        double wirelessChance = exposureChance(wirelessPressure, config);
+        double combinedChance = ProbabilityCurves.union(cableChance, machineChance, wirelessChance);
+        return new ExposureChances(cableChance, machineChance, wirelessChance,
+                ProbabilityCurves.clamp(combinedChance, 0.0, 1.0));
     }
 
-    public static double successChance(ExposureStats exposure, InfectionConfig config) {
-        double cableExposure = exposure.exposedCableFaces() * config.cableFaceWeight()
-                + exposure.wirelessRangeExposures() * config.wirelessRangeWeight();
-        double weightedExposure = cableExposure + exposure.machineExposureWeight();
-        if (weightedExposure <= 0.0) {
-            return 0.0;
-        }
-
-        double breach = ProbabilityCurves.expSaturation(weightedExposure, config.exposureScale());
-        return clamp(breach, 0.0, config.maxSuccessChance());
+    public static double exposureChance(ExposureStats exposure, InfectionConfig config) {
+        return exposureChances(exposure, config).combined();
     }
 
-    public static InfectionRoll roll(VirusClass virusClass, InfectionTarget target,
-            VirusNetworkRiskCache cache, ExposureStats exposure, RandomSource random, InfectionConfig config) {
-        double attempt = attemptChance(virusClass, target, cache, config);
+    public static double t1AttemptChance(long itemCount, InfectionConfig config) {
+        return t1InfectionChance(itemCount, 1.0, config);
+    }
+
+    public static double t1InfectionChance(long itemCount, ExposureStats exposure, InfectionConfig config) {
+        return t1InfectionChance(itemCount, exposureChance(exposure, config), config);
+    }
+
+    public static double t1InfectionChance(long itemCount, double exposureChance, InfectionConfig config) {
+        InfectionConfig.T1 t1 = config.t1();
+        double baseChance = config.baseChances().t1Infection();
+        double quantityPressure = ProbabilityCurves.gompertz(itemCount, t1.initialSuppression(),
+                t1.steepness(), t1.itemCountScale());
+        return ProbabilityCurves.clamp(baseChance + (1.0 - baseChance) * exposureChance * quantityPressure, 0.0,
+                1.0);
+    }
+
+    public static double t2InfectionAttemptChance(long targetCount, InfectionConfig config) {
+        return t2InfectionChance(targetCount, 1.0, config);
+    }
+
+    public static double t2InfectionChance(long targetCount, ExposureStats exposure, InfectionConfig config) {
+        return t2InfectionChance(targetCount, exposureChance(exposure, config), config);
+    }
+
+    public static double t2InfectionChance(long targetCount, double exposureChance, InfectionConfig config) {
+        InfectionConfig.T2Infection t2 = config.t2Infection();
+        double baseChance = config.baseChances().t2Infection();
+        double quantityPressure = ProbabilityCurves.gompertz(targetCount, t2.initialSuppression(),
+                t2.steepness(), t2.targetCountScale());
+        return ProbabilityCurves.clamp(baseChance + (1.0 - baseChance) * exposureChance * quantityPressure, 0.0,
+                1.0);
+    }
+
+    public static double t2FusionConversionChance(long infectedItemTypes, int t1Level, InfectionConfig config) {
+        double levelMultiplier = virusLevelMultiplier(t1Level);
+        InfectionConfig.T2Conversion t2 = config.t2Conversion();
+        double curve = curve(infectedItemTypes, t2.fusionCurve());
+        return ProbabilityCurves.clamp(t2.fusionFactor() * curve * levelMultiplier, 0.0, 1.0);
+    }
+
+    public static double t2SpecializedConversionChance(long infectedTagSeedTypes, int t1Level,
+            InfectionConfig config) {
+        double levelMultiplier = virusLevelMultiplier(t1Level);
+        InfectionConfig.T2Conversion t2 = config.t2Conversion();
+        double curve = curve(infectedTagSeedTypes, t2.specializedCurve());
+        return ProbabilityCurves.clamp(t2.specializedFactor() * curve * levelMultiplier, 0.0, 1.0);
+    }
+
+    public static double t2DedicatedConversionChance(int t1Level, InfectionConfig config) {
+        double levelMultiplier = virusLevelMultiplier(t1Level);
+        InfectionConfig.T2Conversion t2 = config.t2Conversion();
+        double curve = t2.dedicatedBaseChance()
+                + (1.0 - t2.dedicatedBaseChance()) * Math.pow(levelMultiplier, t2.dedicatedLevelExponent());
+        return ProbabilityCurves.clamp(t2.dedicatedFactor() * curve, 0.0, 1.0);
+    }
+
+    public static double t2OtherConversionChance(long resourceAmount, InfectionConfig config) {
+        InfectionConfig.T2Conversion t2 = config.t2Conversion();
+        double curve = curve(t2.otherFactor() * resourceAmount, t2.otherCurve());
+        return ProbabilityCurves.clamp(curve, 0.0, 1.0);
+    }
+
+    public static double anyT2ConversionChance(double fusionChance, double specializedChance, double dedicatedChance,
+            double otherChance) {
+        return ProbabilityCurves.union(fusionChance, specializedChance, dedicatedChance, otherChance);
+    }
+
+    public static double t3ConversionRisk(long fusionCount, double fusionEvolutionLevel,
+            long specializedCount, double specializedEvolutionLevel,
+            long dedicatedCount, double dedicatedEvolutionLevel,
+            long energyCount, double energyEvolutionLevel,
+            long lightningCount, double lightningEvolutionLevel,
+            long sourceCount, double sourceEvolutionLevel,
+            long soulCount, double soulEvolutionLevel,
+            InfectionConfig config) {
+        InfectionConfig.VariantFactors factors = config.t3().variantFactors();
+        return fusionCount * factors.fusion() * fusionEvolutionLevel
+                + specializedCount * factors.specialized() * specializedEvolutionLevel
+                + dedicatedCount * factors.dedicated() * dedicatedEvolutionLevel
+                + energyCount * factors.energy() * energyEvolutionLevel
+                + lightningCount * factors.lightning() * lightningEvolutionLevel
+                + sourceCount * factors.source() * sourceEvolutionLevel
+                + soulCount * factors.soul() * soulEvolutionLevel;
+    }
+
+    public static double t3ConversionChance(double conversionRisk, InfectionConfig config) {
+        InfectionConfig.T3 t3 = config.t3();
+        double baseChance = config.baseChances().t3Conversion();
+        double curve = ProbabilityCurves.gompertz(conversionRisk, t3.initialSuppression(),
+                t3.steepness(), t3.riskScale());
+        return ProbabilityCurves.clamp(baseChance + (1.0 - baseChance) * curve, 0.0, 1.0);
+    }
+
+    public static double spreadSpeedMultiplier(long infectedAmount, int virusLevel, InfectionConfig config) {
+        InfectionConfig.Spread spread = config.spread();
+        double amountPressure = ProbabilityCurves.expSaturation(infectedAmount, spread.infectedAmountScale());
+        double levelMultiplier = spreadLevelMultiplier(virusLevel, spread);
+        double multiplier = 1.0 + spread.acceleration() * amountPressure * levelMultiplier;
+        return ProbabilityCurves.clamp(multiplier, 1.0, spread.maxSpeedMultiplier());
+    }
+
+    public static int spreadIntervalTicks(int baseIntervalTicks, long infectedAmount, int virusLevel,
+            InfectionConfig config) {
+        double multiplier = spreadSpeedMultiplier(infectedAmount, virusLevel, config);
+        int accelerated = (int) Math.floor(baseIntervalTicks / multiplier);
+        return (int) ProbabilityCurves.clamp(accelerated, config.spread().minIntervalTicks(), baseIntervalTicks);
+    }
+
+    public static long spreadGrowthAmount(long infectedAmount, int virusLevel, InfectionConfig config) {
+        double multiplier = spreadSpeedMultiplier(infectedAmount, virusLevel, config);
+        return Math.max(1L, (long) Math.floor(multiplier));
+    }
+
+    public static InfectionRoll roll(double attemptChance, ExposureStats exposure, RandomSource random,
+            InfectionConfig config) {
+        double attempt = ProbabilityCurves.clamp(attemptChance, 0.0, 1.0);
         if (random.nextDouble() >= attempt) {
             return InfectionRoll.noAttempt(attempt);
         }
 
-        double success = successChance(exposure, config);
+        double success = exposureChance(exposure, config);
         if (random.nextDouble() >= success) {
             return InfectionRoll.failedAttempt(attempt, success);
         }
@@ -47,74 +152,27 @@ public final class InfectionRisk {
         return InfectionRoll.success(attempt, success);
     }
 
-    private static double pressure(VirusClass virusClass, InfectionTarget target,
-            VirusNetworkRiskCache cache, InfectionConfig config) {
-        return switch (virusClass) {
-            case TARGETED -> targetedPressure(target, cache, config);
-            case BROAD_SPECTRUM -> broadSpectrumPressure(target, cache, config);
-            case SYSTEMIC -> systemicPressure(cache, config);
-            case POLYMORPHIC -> cache.blacklistedItemCount() / config.polymorphicBlacklistCountScale();
-        };
+    private static double exposureChance(double exposurePressure, InfectionConfig config) {
+        InfectionConfig.Exposure exposure = config.exposure();
+        double saturated = ProbabilityCurves.expSaturation(exposurePressure, exposure.scale());
+        return ProbabilityCurves.clamp(saturated, 0.0, exposure.maxSuccessChance());
     }
 
-    private static double targetedPressure(InfectionTarget target, VirusNetworkRiskCache cache,
-            InfectionConfig config) {
-        if (target instanceof InfectionTarget.ItemTarget itemTarget) {
-            return cache.itemCount(itemTarget.item()) / config.targetedItemCountScale();
-        }
-        return 0.0;
+    private static double virusLevelMultiplier(int virusLevel) {
+        return ProbabilityCurves.clamp(virusLevel, 1.0, 5.0) / 5.0;
     }
 
-    private static double broadSpectrumPressure(InfectionTarget target, VirusNetworkRiskCache cache,
-            InfectionConfig config) {
-        double targetedVirusPressure = cache.virusCount(VirusClass.TARGETED) / config.broadTargetedVirusCountScale();
-
-        if (!(target instanceof InfectionTarget.BroadSpectrumTarget broadTarget)) {
-            return 0.0;
-        }
-
-        return switch (broadTarget.broadVariant()) {
-            case TAG -> tagBroadPressure(broadTarget, cache, config, targetedVirusPressure);
-            case DISK -> diskBroadPressure(broadTarget, cache, config, targetedVirusPressure);
-            case DRIVE -> driveBroadPressure(broadTarget, cache, config, targetedVirusPressure);
-        };
+    private static double spreadLevelMultiplier(int virusLevel, InfectionConfig.Spread spread) {
+        double maxLevel = Math.max(2.0, spread.maxVirusLevel());
+        double clampedLevel = ProbabilityCurves.clamp(virusLevel, 1.0, maxLevel);
+        double normalized = (clampedLevel - 1.0) / (maxLevel - 1.0);
+        return 1.0 + spread.levelInfluence() * Math.pow(normalized, spread.levelExponent());
     }
 
-    private static double tagBroadPressure(InfectionTarget.BroadSpectrumTarget target, VirusNetworkRiskCache cache,
-            InfectionConfig config, double targetedVirusPressure) {
-        if (target.tagId() == null || target.targetedSeedTypes() <= 0) {
-            return 0.0;
-        }
-
-        double tagPressure = target.targetedSeedTypes() / config.broadTagItemCountScale();
-        return tagPressure * config.broadTagWeight()
-                + targetedVirusPressure * config.broadTargetedVirusWeight();
+    private static double curve(double value, InfectionConfig.Curve curve) {
+        return ProbabilityCurves.gompertz(value, curve.initialSuppression(), curve.steepness(), curve.scale());
     }
 
-    private static double diskBroadPressure(InfectionTarget.BroadSpectrumTarget target, VirusNetworkRiskCache cache,
-            InfectionConfig config, double targetedVirusPressure) {
-        double diskPressure = cache.diskUsedBytes(target.diskId()) / config.broadDiskUsedBytesScale();
-        return diskPressure * config.broadDiskWeight()
-                + targetedVirusPressure * config.broadTargetedVirusWeight();
-    }
-
-    private static double driveBroadPressure(InfectionTarget.BroadSpectrumTarget target, VirusNetworkRiskCache cache,
-            InfectionConfig config, double targetedVirusPressure) {
-        double infectedDiskPressure = cache.infectedDiskCount(target.driveId())
-                / config.broadDriveInfectedDiskCountScale();
-        return infectedDiskPressure * config.broadDriveWeight()
-                + targetedVirusPressure * config.broadTargetedVirusWeight();
-    }
-
-    private static double systemicPressure(VirusNetworkRiskCache cache, InfectionConfig config) {
-        double totalBytesPressure = cache.totalBytes() / config.systemicTotalBytesScale();
-        double broadVirusPressure = cache.virusCount(VirusClass.BROAD_SPECTRUM) / config.systemicBroadVirusCountScale();
-
-        return totalBytesPressure * config.systemicTotalBytesWeight()
-                + broadVirusPressure * config.systemicBroadVirusWeight();
-    }
-
-    private static double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+    public record ExposureChances(double cable, double machine, double wireless, double combined) {
     }
 }
