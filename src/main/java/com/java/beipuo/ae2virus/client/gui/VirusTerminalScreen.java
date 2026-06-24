@@ -2,6 +2,7 @@ package com.java.beipuo.ae2virus.client.gui;
 
 import appeng.api.stacks.AmountFormat;
 import com.java.beipuo.ae2virus.Ae2virus;
+import com.java.beipuo.ae2virus.infection.T2VirusKind;
 import com.java.beipuo.ae2virus.network.packet.SyncVirusInfoPacket;
 import com.java.beipuo.ae2virus.registry.AVItems;
 import java.util.ArrayList;
@@ -26,16 +27,18 @@ public class VirusTerminalScreen extends Screen {
     private static final int LIST_TOP = HEADER_HEIGHT;
     private static final int LIST_WIDTH = 162;
     private static final ItemStack T1_VIRUS_ICON = AVItems.T1_BASIC_VIRUS.toStack();
+    private static final ItemStack T2_FUSION_ICON = AVItems.T2_FUSION_VIRUS.toStack();
+    private static final ItemStack T2_SPECIALIZED_ICON = AVItems.T2_SPECIALIZED_VIRUS.toStack();
 
-    private final List<SyncVirusInfoPacket.T1VirusInfo> viruses;
+    private final List<VirusRow> rows;
     private int scrollOffset;
 
-    public VirusTerminalScreen(List<SyncVirusInfoPacket.T1VirusInfo> viruses) {
+    public VirusTerminalScreen(SyncVirusInfoPacket viruses) {
         super(Component.translatable("screen." + Ae2virus.MODID + ".virus_terminal"));
-        this.viruses = List.copyOf(viruses);
+        this.rows = buildRows(viruses);
     }
 
-    public static void open(List<SyncVirusInfoPacket.T1VirusInfo> viruses) {
+    public static void open(SyncVirusInfoPacket viruses) {
         Minecraft.getInstance().setScreen(new VirusTerminalScreen(viruses));
     }
 
@@ -48,10 +51,10 @@ public class VirusTerminalScreen extends Screen {
 
         guiGraphics.drawString(this.font, this.title, left + 8, top + 6, 0x404040, false);
         guiGraphics.drawString(this.font,
-                Component.translatable("screen.ae2virus.virus_terminal.count", this.viruses.size()),
+                Component.translatable("screen.ae2virus.virus_terminal.count", this.rows.size()),
                 left + 84, top + 6, 0x606060, false);
 
-        if (this.viruses.isEmpty()) {
+        if (this.rows.isEmpty()) {
             guiGraphics.drawString(this.font,
                     Component.translatable("screen.ae2virus.virus_terminal.empty").withStyle(ChatFormatting.GRAY),
                     left + LIST_LEFT + 3, top + LIST_TOP + 6, 0x606060, false);
@@ -64,7 +67,7 @@ public class VirusTerminalScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int maxScroll = Math.max(0, this.viruses.size() - VISIBLE_ROWS);
+        int maxScroll = Math.max(0, this.rows.size() - VISIBLE_ROWS);
         this.scrollOffset = Math.max(0, Math.min(maxScroll, this.scrollOffset - (int) Math.signum(scrollY)));
         return true;
     }
@@ -93,52 +96,35 @@ public class VirusTerminalScreen extends Screen {
     }
 
     private void renderVirusRows(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
-        List<SyncVirusInfoPacket.T1VirusInfo> visible = visibleViruses();
+        List<VirusRow> visible = visibleViruses();
         for (int i = 0; i < visible.size(); i++) {
-            SyncVirusInfoPacket.T1VirusInfo virus = visible.get(i);
+            VirusRow virus = visible.get(i);
             int rowLeft = left + LIST_LEFT;
             int rowTop = top + LIST_TOP + i * ROW_HEIGHT;
             if (isMouseOverRow(rowLeft, rowTop, mouseX, mouseY)) {
                 guiGraphics.fill(rowLeft, rowTop, rowLeft + LIST_WIDTH, rowTop + ROW_HEIGHT, 0x55FFFFFF);
             }
 
-            guiGraphics.renderItem(T1_VIRUS_ICON, rowLeft + 1, rowTop + 1);
+            guiGraphics.renderItem(virus.icon(), rowLeft + 1, rowTop + 1);
             guiGraphics.drawString(this.font,
-                    Component.translatable("tooltip.ae2virus.virus_terminal.type_t1"),
+                    virus.typeName(),
                     rowLeft + 21, rowTop + 2, 0x404040, false);
             guiGraphics.drawString(this.font,
-                    Component.translatable("screen.ae2virus.virus_terminal.t1_stats",
-                            virus.level(),
-                            virus.target().formatAmount(virus.blockedAmount(), AmountFormat.FULL),
-                            virus.experience()),
+                    virus.stats(),
                     rowLeft + 21, rowTop + 11, 0x606060, false);
         }
     }
 
     private void renderVirusTooltip(GuiGraphics guiGraphics, int left, int top, int mouseX, int mouseY) {
-        SyncVirusInfoPacket.T1VirusInfo hovered = hoveredVirus(left, top, mouseX, mouseY);
+        VirusRow hovered = hoveredVirus(left, top, mouseX, mouseY);
         if (hovered == null) {
             return;
         }
 
-        guiGraphics.renderComponentTooltip(this.font, List.of(
-                Component.translatable("tooltip.ae2virus.virus_terminal.type_t1")
-                        .withStyle(ChatFormatting.GRAY),
-                Component.translatable("tooltip.ae2virus.virus_terminal.infected_item",
-                        hovered.target().getDisplayName())
-                        .withStyle(ChatFormatting.WHITE),
-                Component.translatable("tooltip.ae2virus.virus_terminal.level", hovered.level())
-                        .withStyle(ChatFormatting.AQUA),
-                Component.translatable("tooltip.ae2virus.virus_terminal.blocked",
-                        hovered.target().formatAmount(hovered.blockedAmount(), AmountFormat.FULL))
-                        .withStyle(ChatFormatting.RED),
-                Component.translatable("tooltip.ae2virus.virus_terminal.experience", hovered.experience())
-                        .withStyle(ChatFormatting.YELLOW),
-                Component.translatable("tooltip.ae2virus.virus_terminal.target_id", hovered.target().getId().toString())
-                        .withStyle(ChatFormatting.DARK_GRAY)), mouseX, mouseY);
+        guiGraphics.renderComponentTooltip(this.font, hovered.tooltip(), mouseX, mouseY);
     }
 
-    private SyncVirusInfoPacket.T1VirusInfo hoveredVirus(int left, int top, int mouseX, int mouseY) {
+    private VirusRow hoveredVirus(int left, int top, int mouseX, int mouseY) {
         int rowLeft = left + LIST_LEFT;
         int rowTop = top + LIST_TOP;
         if (mouseX < rowLeft || mouseX >= rowLeft + LIST_WIDTH || mouseY < rowTop) {
@@ -146,16 +132,16 @@ public class VirusTerminalScreen extends Screen {
         }
 
         int row = (mouseY - rowTop) / ROW_HEIGHT;
-        List<SyncVirusInfoPacket.T1VirusInfo> visible = visibleViruses();
+        List<VirusRow> visible = visibleViruses();
         if (row < 0 || row >= visible.size()) {
             return null;
         }
         return visible.get(row);
     }
 
-    private List<SyncVirusInfoPacket.T1VirusInfo> visibleViruses() {
-        int end = Math.min(this.viruses.size(), this.scrollOffset + VISIBLE_ROWS);
-        return new ArrayList<>(this.viruses.subList(this.scrollOffset, end));
+    private List<VirusRow> visibleViruses() {
+        int end = Math.min(this.rows.size(), this.scrollOffset + VISIBLE_ROWS);
+        return new ArrayList<>(this.rows.subList(this.scrollOffset, end));
     }
 
     private static boolean isMouseOverRow(int rowLeft, int rowTop, int mouseX, int mouseY) {
@@ -164,5 +150,84 @@ public class VirusTerminalScreen extends Screen {
 
     private static int imageHeight() {
         return HEADER_HEIGHT + VISIBLE_ROWS * ROW_HEIGHT + BOTTOM_HEIGHT;
+    }
+
+    private static List<VirusRow> buildRows(SyncVirusInfoPacket packet) {
+        List<VirusRow> rows = new ArrayList<>();
+        for (SyncVirusInfoPacket.T1VirusInfo virus : packet.t1Viruses()) {
+            rows.add(t1Row(virus));
+        }
+        for (SyncVirusInfoPacket.T2VirusInfo virus : packet.t2Viruses()) {
+            rows.add(t2Row(virus));
+        }
+        return List.copyOf(rows);
+    }
+
+    private static VirusRow t1Row(SyncVirusInfoPacket.T1VirusInfo virus) {
+        Component type = Component.translatable("tooltip.ae2virus.virus_terminal.type_t1");
+        Component stats = Component.translatable("screen.ae2virus.virus_terminal.t1_stats",
+                virus.level(),
+                virus.target().formatAmount(virus.blockedAmount(), AmountFormat.FULL),
+                virus.experience());
+        List<Component> tooltip = List.of(
+                type.copy().withStyle(ChatFormatting.GRAY),
+                Component.translatable("tooltip.ae2virus.virus_terminal.infected_item",
+                        virus.target().getDisplayName())
+                        .withStyle(ChatFormatting.WHITE),
+                Component.translatable("tooltip.ae2virus.virus_terminal.level", virus.level())
+                        .withStyle(ChatFormatting.AQUA),
+                Component.translatable("tooltip.ae2virus.virus_terminal.blocked",
+                        virus.target().formatAmount(virus.blockedAmount(), AmountFormat.FULL))
+                        .withStyle(ChatFormatting.RED),
+                Component.translatable("tooltip.ae2virus.virus_terminal.experience", virus.experience())
+                        .withStyle(ChatFormatting.YELLOW),
+                Component.translatable("tooltip.ae2virus.virus_terminal.target_id", virus.target().getId().toString())
+                        .withStyle(ChatFormatting.DARK_GRAY));
+        return new VirusRow(T1_VIRUS_ICON, type, stats, tooltip);
+    }
+
+    private static VirusRow t2Row(SyncVirusInfoPacket.T2VirusInfo virus) {
+        Component type = Component.translatable(typeKey(virus.kind()));
+        ItemStack icon = virus.kind() == T2VirusKind.SPECIALIZED ? T2_SPECIALIZED_ICON : T2_FUSION_ICON;
+        Component stats = Component.translatable("screen.ae2virus.virus_terminal.t2_stats",
+                virus.level(),
+                virus.targets().size(),
+                virus.totalBlockedAmount(),
+                virus.experience());
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(type.copy().withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_target", virus.targetId().toString())
+                .withStyle(ChatFormatting.WHITE));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.level", virus.level())
+                .withStyle(ChatFormatting.AQUA));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_target_count", virus.targets().size())
+                .withStyle(ChatFormatting.LIGHT_PURPLE));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.blocked", virus.totalBlockedAmount())
+                .withStyle(ChatFormatting.RED));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.experience", virus.experience())
+                .withStyle(ChatFormatting.YELLOW));
+        int shown = 0;
+        for (SyncVirusInfoPacket.T2TargetInfo target : virus.targets()) {
+            if (shown >= 3) {
+                tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.more_targets",
+                        virus.targets().size() - shown).withStyle(ChatFormatting.DARK_GRAY));
+                break;
+            }
+            tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_infected_item",
+                    target.target().getDisplayName(), target.blockedAmount()).withStyle(ChatFormatting.DARK_GRAY));
+            shown++;
+        }
+        return new VirusRow(icon, type, stats, List.copyOf(tooltip));
+    }
+
+    private static String typeKey(T2VirusKind kind) {
+        return switch (kind) {
+            case FUSION -> "tooltip.ae2virus.virus_terminal.type_t2_fusion";
+            case SPECIALIZED -> "tooltip.ae2virus.virus_terminal.type_t2_specialized";
+            case SPECIAL_RESOURCE -> "tooltip.ae2virus.virus_terminal.type_t2_special";
+        };
+    }
+
+    private record VirusRow(ItemStack icon, Component typeName, Component stats, List<Component> tooltip) {
     }
 }

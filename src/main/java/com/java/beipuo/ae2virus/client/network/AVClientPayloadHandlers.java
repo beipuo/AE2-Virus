@@ -14,10 +14,10 @@ public final class AVClientPayloadHandlers {
     }
 
     public static void handle(SyncVirusInfoPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> ClientVirusState.replaceT1Viruses(packet.t1Viruses()));
+        context.enqueueWork(() -> ClientVirusState.replaceViruses(packet));
     }
 
     public static void handle(OpenVirusTerminalPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> VirusTerminalScreen.open(packet.t1Viruses()));
+        context.enqueueWork(() -> VirusTerminalScreen.open(packet.viruses()));
     }
 }

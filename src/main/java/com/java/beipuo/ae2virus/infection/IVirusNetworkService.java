@@ -9,6 +9,8 @@ public interface IVirusNetworkService extends IGridService {
 
     List<T1VirusState> t1Viruses();
 
+    List<T2VirusState> t2Viruses();
+
     long blockedAmount(AEKey key);
 
     long allowedExtraction(AEKey key, long requestedAmount);

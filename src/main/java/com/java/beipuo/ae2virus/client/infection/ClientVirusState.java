@@ -8,19 +8,32 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClientVirusState {
     private static final Map<AEKey, SyncVirusInfoPacket.T1VirusInfo> T1_VIRUSES = new ConcurrentHashMap<>();
+    private static final Map<AEKey, Long> T2_BLOCKED_AMOUNTS = new ConcurrentHashMap<>();
 
     private ClientVirusState() {
     }
 
-    public static void replaceT1Viruses(List<SyncVirusInfoPacket.T1VirusInfo> viruses) {
+    public static void replaceViruses(SyncVirusInfoPacket packet) {
         T1_VIRUSES.clear();
-        for (SyncVirusInfoPacket.T1VirusInfo virus : viruses) {
+        T2_BLOCKED_AMOUNTS.clear();
+        for (SyncVirusInfoPacket.T1VirusInfo virus : packet.t1Viruses()) {
             T1_VIRUSES.put(virus.target(), virus);
+        }
+        for (SyncVirusInfoPacket.T2VirusInfo virus : packet.t2Viruses()) {
+            for (SyncVirusInfoPacket.T2TargetInfo target : virus.targets()) {
+                T2_BLOCKED_AMOUNTS.merge(target.target(), target.blockedAmount(), ClientVirusState::saturatedAdd);
+            }
         }
     }
 
     public static long blockedAmount(AEKey key) {
         SyncVirusInfoPacket.T1VirusInfo virus = T1_VIRUSES.get(key);
-        return virus == null ? 0L : virus.blockedAmount();
+        long t1Blocked = virus == null ? 0L : virus.blockedAmount();
+        return saturatedAdd(t1Blocked, T2_BLOCKED_AMOUNTS.getOrDefault(key, 0L));
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        long result = left + right;
+        return result < 0 ? Long.MAX_VALUE : result;
     }
 }
