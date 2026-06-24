@@ -44,7 +44,7 @@ public abstract class MEStorageMenuMixin {
             this.ae2virus$lastSyncedInfectionVersion = version;
             this.ae2virus$syncCooldown = 20;
             PacketDistributor.sendToPlayer(player, SyncVirusInfoPacket.fromStates(service.t1Viruses(),
-                    service.t2Viruses()));
+                    service.t2Viruses(), service.t3Viruses()));
         }
     }
 

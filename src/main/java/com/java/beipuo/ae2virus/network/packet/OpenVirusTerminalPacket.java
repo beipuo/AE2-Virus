@@ -3,6 +3,7 @@ package com.java.beipuo.ae2virus.network.packet;
 import com.java.beipuo.ae2virus.Ae2virus;
 import com.java.beipuo.ae2virus.infection.T1VirusState;
 import com.java.beipuo.ae2virus.infection.T2VirusState;
+import com.java.beipuo.ae2virus.infection.T3VirusState;
 import java.util.List;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -16,8 +17,9 @@ public record OpenVirusTerminalPacket(SyncVirusInfoPacket viruses) implements Cu
             OpenVirusTerminalPacket::encode,
             OpenVirusTerminalPacket::decode);
 
-    public static OpenVirusTerminalPacket fromStates(List<T1VirusState> t1States, List<T2VirusState> t2States) {
-        return new OpenVirusTerminalPacket(SyncVirusInfoPacket.fromStates(t1States, t2States));
+    public static OpenVirusTerminalPacket fromStates(List<T1VirusState> t1States, List<T2VirusState> t2States,
+            List<T3VirusState> t3States) {
+        return new OpenVirusTerminalPacket(SyncVirusInfoPacket.fromStates(t1States, t2States, t3States));
     }
 
     @Override

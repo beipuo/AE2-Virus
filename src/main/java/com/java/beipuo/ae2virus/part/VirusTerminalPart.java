@@ -47,7 +47,8 @@ public class VirusTerminalPart extends AbstractDisplayPart {
                 IVirusNetworkService service = grid.getService(IVirusNetworkService.class);
                 if (service != null) {
                     PacketDistributor.sendToPlayer(serverPlayer,
-                            OpenVirusTerminalPacket.fromStates(service.t1Viruses(), service.t2Viruses()));
+                            OpenVirusTerminalPacket.fromStates(service.t1Viruses(), service.t2Viruses(),
+                                    service.t3Viruses()));
                 }
             });
         }

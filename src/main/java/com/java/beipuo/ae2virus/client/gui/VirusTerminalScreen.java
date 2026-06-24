@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
@@ -29,6 +30,7 @@ public class VirusTerminalScreen extends Screen {
     private static final ItemStack T1_VIRUS_ICON = AVItems.T1_BASIC_VIRUS.toStack();
     private static final ItemStack T2_FUSION_ICON = AVItems.T2_FUSION_VIRUS.toStack();
     private static final ItemStack T2_SPECIALIZED_ICON = AVItems.T2_SPECIALIZED_VIRUS.toStack();
+    private static final ItemStack T3_RULE_ICON = AVItems.T3_RULE_VIRUS.toStack();
 
     private final List<VirusRow> rows;
     private int scrollOffset;
@@ -160,6 +162,9 @@ public class VirusTerminalScreen extends Screen {
         for (SyncVirusInfoPacket.T2VirusInfo virus : packet.t2Viruses()) {
             rows.add(t2Row(virus));
         }
+        for (SyncVirusInfoPacket.T3VirusInfo virus : packet.t3Viruses()) {
+            rows.add(t3Row(virus));
+        }
         return List.copyOf(rows);
     }
 
@@ -196,7 +201,7 @@ public class VirusTerminalScreen extends Screen {
                 virus.experience());
         List<Component> tooltip = new ArrayList<>();
         tooltip.add(type.copy().withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_target", virus.targetId().toString())
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_infected_items", t2TargetNames(virus))
                 .withStyle(ChatFormatting.WHITE));
         tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.level", virus.level())
                 .withStyle(ChatFormatting.AQUA));
@@ -218,6 +223,85 @@ public class VirusTerminalScreen extends Screen {
             shown++;
         }
         return new VirusRow(icon, type, stats, List.copyOf(tooltip));
+    }
+
+    private static VirusRow t3Row(SyncVirusInfoPacket.T3VirusInfo virus) {
+        Component type = Component.translatable("tooltip.ae2virus.virus_terminal.type_t3_rule");
+        Component stats = Component.translatable("screen.ae2virus.virus_terminal.t3_stats",
+                virus.level(),
+                virus.targets().size(),
+                virus.totalBlockedAmount(),
+                virus.experience());
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(type.copy().withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t3_cell", virus.cellId())
+                .withStyle(ChatFormatting.WHITE));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_infected_items", t3TargetNames(virus))
+                .withStyle(ChatFormatting.WHITE));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.level", virus.level())
+                .withStyle(ChatFormatting.AQUA));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_target_count", virus.targets().size())
+                .withStyle(ChatFormatting.LIGHT_PURPLE));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.blocked", virus.totalBlockedAmount())
+                .withStyle(ChatFormatting.RED));
+        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.experience", virus.experience())
+                .withStyle(ChatFormatting.YELLOW));
+        int shown = 0;
+        for (SyncVirusInfoPacket.T3TargetInfo target : virus.targets()) {
+            if (shown >= 3) {
+                tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.more_targets",
+                        virus.targets().size() - shown).withStyle(ChatFormatting.DARK_GRAY));
+                break;
+            }
+            tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.t2_infected_item",
+                    target.target().getDisplayName(), target.blockedAmount()).withStyle(ChatFormatting.DARK_GRAY));
+            shown++;
+        }
+        return new VirusRow(T3_RULE_ICON, type, stats, List.copyOf(tooltip));
+    }
+
+    private static Component t2TargetNames(SyncVirusInfoPacket.T2VirusInfo virus) {
+        if (virus.targets().isEmpty()) {
+            return Component.translatable("tooltip.ae2virus.virus_terminal.no_infected_items");
+        }
+
+        MutableComponent names = Component.empty();
+        int shown = 0;
+        for (SyncVirusInfoPacket.T2TargetInfo target : virus.targets()) {
+            if (shown >= 6) {
+                names.append(Component.translatable("tooltip.ae2virus.virus_terminal.more_targets_inline",
+                        virus.targets().size() - shown));
+                break;
+            }
+            if (shown > 0) {
+                names.append(Component.literal(", "));
+            }
+            names.append(target.target().getDisplayName());
+            shown++;
+        }
+        return names;
+    }
+
+    private static Component t3TargetNames(SyncVirusInfoPacket.T3VirusInfo virus) {
+        if (virus.targets().isEmpty()) {
+            return Component.translatable("tooltip.ae2virus.virus_terminal.no_infected_items");
+        }
+
+        MutableComponent names = Component.empty();
+        int shown = 0;
+        for (SyncVirusInfoPacket.T3TargetInfo target : virus.targets()) {
+            if (shown >= 6) {
+                names.append(Component.translatable("tooltip.ae2virus.virus_terminal.more_targets_inline",
+                        virus.targets().size() - shown));
+                break;
+            }
+            if (shown > 0) {
+                names.append(Component.literal(", "));
+            }
+            names.append(target.target().getDisplayName());
+            shown++;
+        }
+        return names;
     }
 
     private static String typeKey(T2VirusKind kind) {

@@ -5,6 +5,7 @@ import com.java.beipuo.ae2virus.Ae2virus;
 import com.java.beipuo.ae2virus.infection.T1VirusState;
 import com.java.beipuo.ae2virus.infection.T2VirusKind;
 import com.java.beipuo.ae2virus.infection.T2VirusState;
+import com.java.beipuo.ae2virus.infection.T3VirusState;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,7 +15,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo> t2Viruses)
+public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo> t2Viruses,
+        List<T3VirusInfo> t3Viruses)
         implements CustomPacketPayload {
     public static final Type<SyncVirusInfoPacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(Ae2virus.MODID, "sync_virus_info"));
@@ -22,7 +24,8 @@ public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo>
             SyncVirusInfoPacket::encode,
             SyncVirusInfoPacket::decode);
 
-    public static SyncVirusInfoPacket fromStates(List<T1VirusState> t1States, List<T2VirusState> t2States) {
+    public static SyncVirusInfoPacket fromStates(List<T1VirusState> t1States, List<T2VirusState> t2States,
+            List<T3VirusState> t3States) {
         Map<AEKey, T1VirusInfo> mergedViruses = new LinkedHashMap<>();
         for (T1VirusState state : t1States) {
             T1VirusInfo current = mergedViruses.get(state.target());
@@ -43,10 +46,28 @@ public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo>
             for (Map.Entry<AEKey, Long> entry : state.blockedAmounts().entrySet()) {
                 targets.add(new T2TargetInfo(entry.getKey(), entry.getValue()));
             }
+            if (targets.isEmpty()) {
+                continue;
+            }
             t2Viruses.add(new T2VirusInfo(state.kind(), state.targetId(), state.experience(), state.level(),
                     state.totalBlockedAmount(), List.copyOf(targets)));
         }
-        return new SyncVirusInfoPacket(List.copyOf(mergedViruses.values()), List.copyOf(t2Viruses));
+
+        List<T3VirusInfo> t3Viruses = new ArrayList<>(t3States.size());
+        for (T3VirusState state : t3States) {
+            List<T3TargetInfo> targets = new ArrayList<>();
+            for (Map.Entry<AEKey, Long> entry : state.blockedAmounts().entrySet()) {
+                targets.add(new T3TargetInfo(entry.getKey(), entry.getValue()));
+            }
+            if (targets.isEmpty()) {
+                continue;
+            }
+            t3Viruses.add(new T3VirusInfo(state.cellId(), state.experience(), state.level(),
+                    state.totalBlockedAmount(), List.copyOf(targets)));
+        }
+
+        return new SyncVirusInfoPacket(List.copyOf(mergedViruses.values()), List.copyOf(t2Viruses),
+                List.copyOf(t3Viruses));
     }
 
     @Override
@@ -76,6 +97,20 @@ public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo>
                 buffer.writeVarLong(target.blockedAmount());
             }
         }
+
+        buffer.writeVarInt(packet.t3Viruses.size());
+        for (T3VirusInfo virus : packet.t3Viruses) {
+            buffer.writeUtf(virus.cellId());
+            buffer.writeVarLong(virus.experience());
+            buffer.writeVarInt(virus.level());
+            buffer.writeVarLong(virus.totalBlockedAmount());
+            buffer.writeVarInt(virus.targets().size());
+            for (T3TargetInfo target : virus.targets()) {
+                AEKey.STREAM_CODEC.encode(buffer, target.target());
+                buffer.writeVarLong(target.blockedAmount());
+            }
+        }
+
     }
 
     private static SyncVirusInfoPacket decode(RegistryFriendlyByteBuf buffer) {
@@ -111,7 +146,25 @@ public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo>
             t2Viruses.add(new T2VirusInfo(kind, targetId, experience, level, totalBlockedAmount,
                     List.copyOf(targets)));
         }
-        return new SyncVirusInfoPacket(List.copyOf(viruses), List.copyOf(t2Viruses));
+        int t3Size = buffer.readVarInt();
+        List<T3VirusInfo> t3Viruses = new ArrayList<>(t3Size);
+        for (int i = 0; i < t3Size; i++) {
+            String cellId = buffer.readUtf();
+            long experience = buffer.readVarLong();
+            int level = buffer.readVarInt();
+            long totalBlockedAmount = buffer.readVarLong();
+            int targetCount = buffer.readVarInt();
+            List<T3TargetInfo> targets = new ArrayList<>(targetCount);
+            for (int targetIndex = 0; targetIndex < targetCount; targetIndex++) {
+                AEKey target = AEKey.STREAM_CODEC.decode(buffer);
+                long blockedAmount = buffer.readVarLong();
+                if (target != null) {
+                    targets.add(new T3TargetInfo(target, blockedAmount));
+                }
+            }
+            t3Viruses.add(new T3VirusInfo(cellId, experience, level, totalBlockedAmount, List.copyOf(targets)));
+        }
+        return new SyncVirusInfoPacket(List.copyOf(viruses), List.copyOf(t2Viruses), List.copyOf(t3Viruses));
     }
 
     public record T1VirusInfo(AEKey target, long blockedAmount, long experience, int level) {
@@ -128,4 +181,16 @@ public record SyncVirusInfoPacket(List<T1VirusInfo> t1Viruses, List<T2VirusInfo>
 
     public record T2TargetInfo(AEKey target, long blockedAmount) {
     }
+
+    public record T3VirusInfo(
+            String cellId,
+            long experience,
+            int level,
+            long totalBlockedAmount,
+            List<T3TargetInfo> targets) {
+    }
+
+    public record T3TargetInfo(AEKey target, long blockedAmount) {
+    }
+
 }
