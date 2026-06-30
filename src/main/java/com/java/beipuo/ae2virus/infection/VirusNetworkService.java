@@ -15,6 +15,7 @@ import appeng.api.util.AECableType;
 import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
 import com.java.beipuo.ae2virus.registry.AVItems;
 import com.java.beipuo.ae2virus.storage.DataStreamKey;
+import com.java.beipuo.ae2virus.storage.DataStreamKeyType;
 import appeng.parts.AEBasePart;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -495,31 +496,23 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private void handleInfectionDrops() {
-        long totalInfectedAmount = totalInfectedAmount();
         if (hasDataStreamStorageCell()) {
             dropDataStreams();
         }
-
-        long shellAmount = (long) Math.floor(totalInfectedAmount * 0.01);
-        if (shellAmount <= 0L || this.random.nextDouble() >= 0.01) {
-            return;
-        }
-
-        insertOrDrop(AEItemKey.of(AVItems.TARGETED_VIRUS_SHELL.get()), shellAmount);
     }
 
     private void dropDataStreams() {
         for (T1VirusState virus : this.t1Viruses) {
-            insertDataStream(virus.target(), virus.blockedAmount(), virus.level());
+            insertDataStream(virus.target(), virus.blockedAmount(), 1, null, virus.level(), virus.experience());
         }
         for (T2VirusState virus : this.t2Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(entry.getKey(), entry.getValue(), virus.level());
+                insertDataStream(entry.getKey(), entry.getValue(), 2, virus.kind(), virus.level(), virus.experience());
             }
         }
         for (T3VirusState virus : this.t3Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(entry.getKey(), entry.getValue(), virus.level());
+                insertDataStream(entry.getKey(), entry.getValue(), 3, null, virus.level(), virus.experience());
             }
         }
     }
@@ -549,12 +542,20 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
     }
 
-    private void insertDataStream(AEKey target, long amount, int level) {
-        DataStreamKey key = DataStreamKey.of(target, level);
+    private void insertDataStream(AEKey target, long amount, int tier, T2VirusKind t2Kind, int level, long experience) {
+        DataStreamKey key = DataStreamKey.of(target, tier, t2Kind, level, experience);
         if (key == null || amount <= 0L) {
             return;
         }
-        this.storageService.getInventory().insert(key, amount, Actionable.MODULATE, this.actionSource);
+        long internalAmount = dataStreamAmount(amount);
+        this.storageService.getInventory().insert(key, internalAmount, Actionable.MODULATE, this.actionSource);
+    }
+
+    private static long dataStreamAmount(long megabytes) {
+        if (megabytes > Long.MAX_VALUE / DataStreamKeyType.AMOUNT_MB) {
+            return Long.MAX_VALUE;
+        }
+        return megabytes * DataStreamKeyType.AMOUNT_MB;
     }
 
     private void dropNearNetwork(AEItemKey key, long amount) {

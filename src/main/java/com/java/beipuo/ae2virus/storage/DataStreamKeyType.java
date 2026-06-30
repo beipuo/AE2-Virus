@@ -10,6 +10,8 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 public final class DataStreamKeyType extends AEKeyType {
+    public static final int AMOUNT_MB = 1000;
+
     public static final DataStreamKeyType TYPE = new DataStreamKeyType();
 
     private DataStreamKeyType() {
@@ -25,16 +27,26 @@ public final class DataStreamKeyType extends AEKeyType {
 
     @Override
     public int getAmountPerByte() {
-        return 8;
+        return 8 * AMOUNT_MB;
     }
 
     @Override
     public int getAmountPerOperation() {
-        return 64;
+        return AMOUNT_MB * 125 / 1000;
     }
 
     @Override
     public @Nullable AEKey readFromPacket(RegistryFriendlyByteBuf input) {
         return DataStreamKey.fromPacket(input);
+    }
+
+    @Override
+    public int getAmountPerUnit() {
+        return AMOUNT_MB;
+    }
+
+    @Override
+    public String getUnitSymbol() {
+        return "MB";
     }
 }

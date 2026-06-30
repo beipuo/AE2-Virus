@@ -4,6 +4,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import com.java.beipuo.ae2virus.Ae2virus;
+import com.java.beipuo.ae2virus.infection.T2VirusKind;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -23,44 +24,87 @@ public final class DataStreamKey extends AEKey {
     public static final MapCodec<DataStreamKey> MAP_CODEC = RecordCodecBuilder.mapCodec(
             builder -> builder.group(
                     AEItemKey.CODEC.fieldOf("target").forGetter(DataStreamKey::target),
-                    Codec.INT.fieldOf("virus_level").forGetter(DataStreamKey::virusLevel))
+                    Codec.INT.optionalFieldOf("virus_tier", 1).forGetter(DataStreamKey::virusTier),
+                    Codec.STRING.optionalFieldOf("t2_kind", "").forGetter(DataStreamKey::t2KindName),
+                    Codec.INT.fieldOf("virus_level").forGetter(DataStreamKey::virusLevel),
+                    Codec.LONG.optionalFieldOf("experience", 0L).forGetter(DataStreamKey::experience))
                     .apply(builder, DataStreamKey::of));
     public static final Codec<DataStreamKey> CODEC = MAP_CODEC.codec();
 
     private final AEItemKey target;
+    private final int virusTier;
+    private final String t2KindName;
     private final int virusLevel;
+    private final long experience;
     private final PrimaryKey primaryKey;
     private final ResourceLocation id;
     private final int hashCode;
 
-    private DataStreamKey(AEItemKey target, int virusLevel) {
+    private DataStreamKey(AEItemKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
         this.target = target;
+        this.virusTier = Math.max(1, Math.min(3, virusTier));
+        this.t2KindName = this.virusTier == 2 ? t2KindName : "";
         this.virusLevel = Math.max(1, virusLevel);
-        this.primaryKey = new PrimaryKey(target.getPrimaryKey(), this.virusLevel);
+        this.experience = Math.max(0L, experience);
+        this.primaryKey = new PrimaryKey(target.getPrimaryKey(), this.virusTier, this.t2KindName, this.virusLevel,
+                this.experience);
         ResourceLocation targetId = target.getId();
         this.id = ResourceLocation.fromNamespaceAndPath(Ae2virus.MODID,
-                "data_stream/" + targetId.getNamespace() + "/" + targetId.getPath() + "/t" + this.virusLevel);
-        this.hashCode = 31 * target.hashCode() + this.virusLevel;
+                "data_stream/" + targetId.getNamespace() + "/" + targetId.getPath() + "/t" + this.virusTier + "/"
+                        + this.t2KindName + "/l" + this.virusLevel + "/e" + this.experience);
+        this.hashCode = (((31 * target.hashCode() + this.virusTier) * 31 + this.t2KindName.hashCode()) * 31
+                + this.virusLevel) * 31 + Long.hashCode(this.experience);
     }
 
     @Nullable
     public static DataStreamKey of(AEKey target, int virusLevel) {
+        return of(target, 1, "", virusLevel, 0L);
+    }
+
+    @Nullable
+    public static DataStreamKey of(AEKey target, int virusTier, @Nullable T2VirusKind t2Kind, int virusLevel,
+            long experience) {
+        return of(target, virusTier, t2Kind == null ? "" : t2Kind.serializedName(), virusLevel, experience);
+    }
+
+    @Nullable
+    public static DataStreamKey of(AEKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
         if (target instanceof AEItemKey itemKey) {
-            return of(itemKey, virusLevel);
+            return of(itemKey, virusTier, t2KindName, virusLevel, experience);
         }
         return null;
     }
 
     public static DataStreamKey of(AEItemKey target, int virusLevel) {
-        return new DataStreamKey(target, virusLevel);
+        return of(target, 1, "", virusLevel, 0L);
+    }
+
+    public static DataStreamKey of(AEItemKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
+        return new DataStreamKey(target, virusTier, t2KindName, virusLevel, experience);
     }
 
     public AEItemKey target() {
         return this.target;
     }
 
+    public int virusTier() {
+        return this.virusTier;
+    }
+
+    public String t2KindName() {
+        return this.t2KindName;
+    }
+
+    public T2VirusKind t2Kind() {
+        return T2VirusKind.byName(this.t2KindName);
+    }
+
     public int virusLevel() {
         return this.virusLevel;
+    }
+
+    public long experience() {
+        return this.experience;
     }
 
     @Override
@@ -71,7 +115,8 @@ public final class DataStreamKey extends AEKey {
     @Override
     public AEKey dropSecondary() {
         AEItemKey primaryTarget = this.target.dropSecondary();
-        return primaryTarget == this.target ? this : of(primaryTarget, this.virusLevel);
+        return primaryTarget == this.target ? this
+                : of(primaryTarget, this.virusTier, this.t2KindName, this.virusLevel, this.experience);
     }
 
     @Override
@@ -98,16 +143,36 @@ public final class DataStreamKey extends AEKey {
     @Override
     public void writeToPacket(RegistryFriendlyByteBuf data) {
         this.target.writeToPacket(data);
+        data.writeVarInt(this.virusTier);
+        data.writeUtf(this.t2KindName);
         data.writeVarInt(this.virusLevel);
+        data.writeVarLong(this.experience);
     }
 
     public static DataStreamKey fromPacket(RegistryFriendlyByteBuf data) {
-        return of(AEItemKey.fromPacket(data), data.readVarInt());
+        return of(AEItemKey.fromPacket(data), data.readVarInt(), data.readUtf(), data.readVarInt(),
+                data.readVarLong());
     }
 
     @Override
     protected Component computeDisplayName() {
-        return Component.translatable("ae2virus.key.data_stream", this.target.getDisplayName(), this.virusLevel);
+        return Component.translatable("ae2virus.key.data_stream",
+                Component.translatable(virusTypeTranslationKey()),
+                this.target.getDisplayName());
+    }
+
+    public String virusTypeTranslationKey() {
+        if (this.virusTier == 3) {
+            return "tooltip.ae2virus.virus_terminal.type_t3_rule";
+        }
+        if (this.virusTier == 2) {
+            return switch (t2Kind()) {
+                case FUSION -> "tooltip.ae2virus.virus_terminal.type_t2_fusion";
+                case SPECIALIZED -> "tooltip.ae2virus.virus_terminal.type_t2_specialized";
+                case SPECIAL_RESOURCE -> "tooltip.ae2virus.virus_terminal.type_t2_special";
+            };
+        }
+        return "tooltip.ae2virus.virus_terminal.type_t1";
     }
 
     @Override
@@ -127,7 +192,11 @@ public final class DataStreamKey extends AEKey {
         if (!(o instanceof DataStreamKey other)) {
             return false;
         }
-        return this.virusLevel == other.virusLevel && this.target.equals(other.target);
+        return this.virusTier == other.virusTier
+                && this.virusLevel == other.virusLevel
+                && this.experience == other.experience
+                && this.t2KindName.equals(other.t2KindName)
+                && this.target.equals(other.target);
     }
 
     @Override
@@ -137,9 +206,12 @@ public final class DataStreamKey extends AEKey {
 
     @Override
     public String toString() {
-        return "DataStreamKey{target=" + this.target + ", virusLevel=" + this.virusLevel + '}';
+        return "DataStreamKey{target=" + this.target + ", virusTier=" + this.virusTier
+                + ", t2KindName='" + this.t2KindName + "', virusLevel=" + this.virusLevel
+                + ", experience=" + this.experience + '}';
     }
 
-    private record PrimaryKey(Object targetPrimaryKey, int virusLevel) {
+    private record PrimaryKey(Object targetPrimaryKey, int virusTier, String t2KindName, int virusLevel,
+            long experience) {
     }
 }

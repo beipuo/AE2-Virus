@@ -19,21 +19,6 @@ public final class AVItems {
     public static final DeferredItem<BlockItem> NETWORK_ISOLATION_GATE = ITEMS.blockItem(AVBlocks.NETWORK_ISOLATION_GATE);
     public static final DeferredItem<PartItem<VirusTerminalPart>> VIRUS_TERMINAL = AVParts.VIRUS_TERMINAL;
 
-    public static final DeferredItem<Item> TARGETED_VIRUS_SHELL = ITEMS.material("targeted_virus_shell");
-    public static final DeferredItem<Item> BROAD_SPECTRUM_VIRUS_SHELL = ITEMS.material("broad_spectrum_virus_shell");
-    public static final DeferredItem<Item> SYSTEMIC_VIRUS_SHELL = ITEMS.material("systemic_virus_shell");
-    public static final DeferredItem<Item> POLYMORPHIC_VIRUS_SHELL = ITEMS.material("polymorphic_virus_shell");
-
-    public static final DeferredItem<Item> TARGETED_VIRUS_CORE = ITEMS.material("targeted_virus_core");
-    public static final DeferredItem<Item> BROAD_SPECTRUM_VIRUS_CORE = ITEMS.material("broad_spectrum_virus_core");
-    public static final DeferredItem<Item> SYSTEMIC_VIRUS_CORE = ITEMS.material("systemic_virus_core");
-    public static final DeferredItem<Item> POLYMORPHIC_VIRUS_CORE = ITEMS.material("polymorphic_virus_core");
-
-    public static final DeferredItem<Item> TARGETED_VIRUS = ITEMS.singleStack("targeted_virus");
-    public static final DeferredItem<Item> BROAD_SPECTRUM_VIRUS = ITEMS.singleStack("broad_spectrum_virus");
-    public static final DeferredItem<Item> SYSTEMIC_VIRUS = ITEMS.singleStack("systemic_virus");
-    public static final DeferredItem<Item> POLYMORPHIC_VIRUS = ITEMS.singleStack("polymorphic_virus");
-
     public static final DeferredItem<Item> T1_BASIC_VIRUS = ITEMS.singleStack("t1_basic_virus");
     public static final DeferredItem<Item> T2_FUSION_VIRUS = ITEMS.singleStack("t2_fusion_virus");
     public static final DeferredItem<Item> T2_SPECIALIZED_VIRUS = ITEMS.singleStack("t2_specialized_virus");
@@ -41,10 +26,6 @@ public final class AVItems {
     public static final DeferredItem<Item> T3_RULE_VIRUS = ITEMS.singleStack("t3_rule_virus");
     public static final DeferredItem<Item> CREATIVE_VIRUS = ITEMS.singleStack("creative_virus");
 
-    public static final DeferredItem<Item> DATA_FRAGMENT = ITEMS.material("data_fragment");
-    public static final DeferredItem<Item> DAMAGED_DATA_PACKET = ITEMS.material("damaged_data_packet");
-    public static final DeferredItem<Item> CONTAMINATED_ITEM_INDEX = ITEMS.material("contaminated_item_index");
-    public static final DeferredItem<Item> DATA_STREAM_SAMPLE = ITEMS.material("data_stream_sample");
     public static final DeferredItem<Item> DATA_STREAM_CAPSULE = ITEMS.singleStack("data_stream_capsule");
     public static final DeferredItem<DataStreamStorageCellItem> DATA_STREAM_STORAGE_CELL = ITEMS.singleStack(
             "data_stream_storage_cell",
