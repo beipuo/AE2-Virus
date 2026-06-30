@@ -1,15 +1,21 @@
 package com.java.beipuo.ae2virus.infection;
 
+import appeng.api.config.Actionable;
 import appeng.api.implementations.blockentities.IChestOrDrive;
 import appeng.api.implementations.parts.ICablePart;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridServiceProvider;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.cells.StorageCell;
 import appeng.api.util.AECableType;
+import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
+import com.java.beipuo.ae2virus.item.DataStreamPayload;
+import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
+import com.java.beipuo.ae2virus.registry.AVItems;
 import appeng.parts.AEBasePart;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,6 +31,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
@@ -38,6 +46,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     private final IStorageService storageService;
     private final InfectionConfig config = InfectionConfig.defaults();
     private final RandomSource random = RandomSource.create();
+    private final IActionSource actionSource = IActionSource.empty();
     private final VirusNetworkRiskCache riskCache = new VirusNetworkRiskCache();
     private final List<T1VirusState> t1Viruses = new ArrayList<>();
     private final List<T2VirusState> t2Viruses = new ArrayList<>();
@@ -229,8 +238,10 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         if (virus == null) {
             this.t1Viruses.add(new T1VirusState(target, 1L, 1L));
             markInfectionChanged();
-        } else if (growT1Virus(virus)) {
+            handleInfectionDrops();
+        } else if (growT1Virus(virus) > 0L) {
             markInfectionChanged();
+            handleInfectionDrops();
         }
     }
 
@@ -257,14 +268,15 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         return null;
     }
 
-    private boolean growT1Virus(T1VirusState virus) {
+    private long growT1Virus(T1VirusState virus) {
         long storedAmount = storedAmount(virus.target());
         if (virus.blockedAmount() >= storedAmount) {
-            return false;
+            return 0L;
         }
         long room = storedAmount - virus.blockedAmount();
         long growth = spreadGrowthAmount(virus.blockedAmount(), virus.level());
-        return virus.addBlockedAmount(Math.min(room, growth));
+        long added = Math.min(room, growth);
+        return virus.addBlockedAmount(added) ? added : 0L;
     }
 
     private static boolean canT1Infect(AEKey key) {
@@ -291,6 +303,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
         if (changed) {
             markInfectionChanged();
+            handleInfectionDrops();
         }
     }
 
@@ -318,7 +331,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
 
         T2VirusState targetVirus = virus == null ? new T2VirusState(T2VirusKind.FUSION, targetId, 1L) : virus;
-        if (!growT2Virus(targetVirus, target)) {
+        if (growT2Virus(targetVirus, target) <= 0L) {
             return false;
         }
         if (virus == null) {
@@ -346,7 +359,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
 
         T2VirusState targetVirus = virus == null ? new T2VirusState(T2VirusKind.SPECIALIZED, choice.tagId(), 1L) : virus;
-        if (!growT2Virus(targetVirus, target)) {
+        if (growT2Virus(targetVirus, target) <= 0L) {
             return false;
         }
         if (virus == null) {
@@ -443,11 +456,11 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 && storedAmount(target) > blockedAmount;
     }
 
-    private boolean growT2Virus(T2VirusState virus, AEKey target) {
+    private long growT2Virus(T2VirusState virus, AEKey target) {
         long storedAmount = storedAmount(target);
         long currentBlocked = virus.blockedAmount(target);
         if (currentBlocked >= storedAmount) {
-            return false;
+            return 0L;
         }
 
         long room = storedAmount - currentBlocked;
@@ -458,10 +471,11 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 this.random,
                 this.config);
         if (roll.result() != InfectionRoll.Result.SUCCESS) {
-            return false;
+            return 0L;
         }
 
-        return virus.addBlockedAmount(target, Math.min(room, growth));
+        long added = Math.min(room, growth);
+        return virus.addBlockedAmount(target, added) ? added : 0L;
     }
 
     private void runT3RiskCheck() {
@@ -477,7 +491,146 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
         if (changed) {
             markInfectionChanged();
+            handleInfectionDrops();
         }
+    }
+
+    private void handleInfectionDrops() {
+        long totalInfectedAmount = totalInfectedAmount();
+        long shellAmount = (long) Math.floor(totalInfectedAmount * 0.01);
+        if (shellAmount <= 0L || this.random.nextDouble() >= 0.01) {
+            return;
+        }
+
+        insertOrDrop(AEItemKey.of(AVItems.TARGETED_VIRUS_SHELL.get()), shellAmount);
+        if (hasDataStreamStorageCell()) {
+            dropDataStreams();
+        }
+    }
+
+    private void dropDataStreams() {
+        for (T1VirusState virus : this.t1Viruses) {
+            insertDataStreamOrDrop(dataStreamKey(virus.target(), virus.blockedAmount(), virus.level()));
+        }
+        for (T2VirusState virus : this.t2Viruses) {
+            for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
+                insertDataStreamOrDrop(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+            }
+        }
+        for (T3VirusState virus : this.t3Viruses) {
+            for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
+                insertDataStreamOrDrop(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+            }
+        }
+    }
+
+    private AEItemKey dataStreamKey(AEKey target, long infectedAmount, int level) {
+        ItemStack stack = new ItemStack(AVItems.DATA_STREAM_CAPSULE.get());
+        IGridNode node = firstTrackedNode();
+        if (node != null) {
+            DataStreamPayload.write(stack, target, infectedAmount, level, node.getLevel().registryAccess());
+        }
+        return AEItemKey.of(stack);
+    }
+
+    private boolean hasDataStreamStorageCell() {
+        for (IGridNode node : this.trackedNodes) {
+            Object owner = node.getOwner();
+            if (!(owner instanceof BlockEntity blockEntity) || !(owner instanceof IChestOrDrive drive)
+                    || blockEntity.getLevel() == null || !drive.isPowered()) {
+                continue;
+            }
+
+            for (int slot = 0; slot < drive.getCellCount(); slot++) {
+                if (drive.getCellItem(slot) instanceof DataStreamStorageCellItem) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void insertOrDrop(AEItemKey key, long amount) {
+        long remaining = amount - this.storageService.getInventory().insert(key, amount,
+                Actionable.MODULATE, this.actionSource);
+        if (remaining > 0L) {
+            dropNearNetwork(key, remaining);
+        }
+    }
+
+    private void insertDataStreamOrDrop(AEItemKey key) {
+        long remaining = 1L;
+        for (IGridNode node : this.trackedNodes) {
+            Object owner = node.getOwner();
+            if (!(owner instanceof BlockEntity blockEntity) || !(owner instanceof IChestOrDrive drive)
+                    || blockEntity.getLevel() == null || !drive.isPowered()) {
+                continue;
+            }
+
+            for (int slot = 0; slot < drive.getCellCount(); slot++) {
+                if (!(drive.getCellItem(slot) instanceof DataStreamStorageCellItem)) {
+                    continue;
+                }
+                StorageCell cell = drive.getOriginalCellInventory(slot);
+                if (cell != null) {
+                    remaining -= cell.insert(key, remaining, Actionable.MODULATE, this.actionSource);
+                    if (remaining <= 0L) {
+                        return;
+                    }
+                }
+            }
+        }
+        dropNearNetwork(key, remaining);
+    }
+
+    private void dropNearNetwork(AEItemKey key, long amount) {
+        IGridNode node = firstTrackedNode();
+        if (node == null || node.getLevel() == null || node.getLevel().isClientSide()) {
+            return;
+        }
+
+        BlockPos pos = nodePosition(node);
+        List<ItemStack> drops = new ArrayList<>();
+        key.addDrops(amount, drops, node.getLevel(), pos);
+        for (ItemStack stack : drops) {
+            ItemEntity entity = new ItemEntity(node.getLevel(), pos.getX() + 0.5D, pos.getY() + 0.5D,
+                    pos.getZ() + 0.5D, stack);
+            node.getLevel().addFreshEntity(entity);
+        }
+    }
+
+    private IGridNode firstTrackedNode() {
+        for (IGridNode node : this.trackedNodes) {
+            if (node != null) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    private BlockPos nodePosition(IGridNode node) {
+        Object owner = node.getOwner();
+        if (owner instanceof AEBasePart part && part.getBlockEntity() != null) {
+            return part.getBlockEntity().getBlockPos();
+        }
+        if (owner instanceof BlockEntity blockEntity) {
+            return blockEntity.getBlockPos();
+        }
+        return BlockPos.ZERO;
+    }
+
+    private long totalInfectedAmount() {
+        long total = 0L;
+        for (T1VirusState virus : this.t1Viruses) {
+            total = saturatedAdd(total, virus.blockedAmount());
+        }
+        for (T2VirusState virus : this.t2Viruses) {
+            total = saturatedAdd(total, virus.totalBlockedAmount());
+        }
+        for (T3VirusState virus : this.t3Viruses) {
+            total = saturatedAdd(total, virus.totalBlockedAmount());
+        }
+        return total;
     }
 
     private boolean growExistingT3Virus(Map<String, T3CellInfo> cells) {
@@ -493,7 +646,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         if (virus == null) {
             return false;
         }
-        return growT3Virus(virus, cells.get(virus.cellId()));
+        return growT3Virus(virus, cells.get(virus.cellId())) > 0L;
     }
 
     private boolean runT3ConversionRiskCheck(Map<String, T3CellInfo> cells) {
@@ -509,7 +662,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
         T3VirusState virus = t3Virus(cell.cellId());
         T3VirusState targetVirus = virus == null ? new T3VirusState(cell.cellId(), 1L) : virus;
-        if (!growT3Virus(targetVirus, cell)) {
+        if (growT3Virus(targetVirus, cell) <= 0L) {
             return false;
         }
         if (virus == null) {
@@ -538,16 +691,16 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 0L, 1.0, 0L, 1.0, 0L, 1.0, 0L, 1.0, 0L, 1.0, this.config);
     }
 
-    private boolean growT3Virus(T3VirusState virus, T3CellInfo cell) {
+    private long growT3Virus(T3VirusState virus, T3CellInfo cell) {
         AEKey target = randomCandidate(t3SusceptibleTargets(cell, virus));
         if (target == null) {
-            return false;
+            return 0L;
         }
 
         long storedAmount = cell.storedAmount(target);
         long currentBlocked = virus.blockedAmount(target);
         if (currentBlocked >= storedAmount) {
-            return false;
+            return 0L;
         }
 
         long room = storedAmount - currentBlocked;
@@ -558,17 +711,21 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 this.random,
                 this.config);
         if (roll.result() != InfectionRoll.Result.SUCCESS) {
-            return false;
+            return 0L;
         }
 
-        return virus.addBlockedAmount(target, Math.min(room, growth));
+        long added = Math.min(room, growth);
+        return virus.addBlockedAmount(target, added) ? added : 0L;
     }
 
     private List<AEKey> t3SusceptibleTargets(T3CellInfo cell, T3VirusState virus) {
         List<AEKey> candidates = new ArrayList<>();
         for (Map.Entry<AEKey, Long> entry : cell.storedAmounts().entrySet()) {
             AEKey target = entry.getKey();
-            if (target instanceof AEItemKey && entry.getValue() > virus.blockedAmount(target)) {
+            if (target instanceof AEItemKey itemKey
+                    && !(itemKey.getItem() instanceof DataStreamCapsuleItem)
+                    && !(itemKey.getItem() instanceof DataStreamStorageCellItem)
+                    && entry.getValue() > virus.blockedAmount(target)) {
                 candidates.add(target);
             }
         }
@@ -1009,7 +1166,9 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 if (amount > 0) {
                     fallbackUsedAmount = saturatedAdd(fallbackUsedAmount, amount);
                 }
-                if (amount > 0 && key instanceof AEItemKey) {
+                if (amount > 0 && key instanceof AEItemKey itemKey
+                        && !(itemKey.getItem() instanceof DataStreamCapsuleItem)
+                        && !(itemKey.getItem() instanceof DataStreamStorageCellItem)) {
                     amounts.put(key, amount);
                     count++;
                     if (count >= maxCandidates) {

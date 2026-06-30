@@ -71,6 +71,10 @@ public class AVDeferredRegister<T> extends DeferredRegister<T> {
         public <I extends Item> DeferredItem<I> singleStack(String name, Function<Item.Properties, ? extends I> factory) {
             return registerItem(name, factory, new Item.Properties().stacksTo(1));
         }
+
+        public <I extends Item> DeferredItem<I> item(String name, Function<Item.Properties, ? extends I> factory) {
+            return registerItem(name, factory, new Item.Properties());
+        }
     }
 
     private static final class ResourceKeyHelper {

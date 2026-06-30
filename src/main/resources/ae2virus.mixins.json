@@ -4,6 +4,7 @@
   "package": "com.java.beipuo.ae2virus.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "BasicCellInventoryMixin",
     "MEStorageMenuMixin",
     "NetworkStorageMixin"
   ],
