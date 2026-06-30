@@ -1,6 +1,7 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "ae2:item/singularity"
+    "layer0": "ae2virus:item/virus_core_specialized",
+    "layer1": "ae2virus:item/virus_shell"
   }
 }
