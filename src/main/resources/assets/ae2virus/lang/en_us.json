@@ -71,8 +71,6 @@
   "tooltip.ae2virus.virus_terminal.blocked": "Locked amount: %s",
   "tooltip.ae2virus.virus_terminal.experience": "Experience: %s",
   "tooltip.ae2virus.virus_terminal.target_id": "Target: %s",
-  "tooltip.ae2virus.data_stream_capsule.empty": "Empty data stream",
-  "tooltip.ae2virus.data_stream_capsule.target": "Target: %s",
-  "tooltip.ae2virus.data_stream_capsule.amount": "Infected amount: %s",
-  "tooltip.ae2virus.data_stream_capsule.level": "Virus level: %s"
+  "ae2virus.key_type.data_stream": "Data Streams",
+  "ae2virus.key.data_stream": "%s Data Stream T%s"
 }

@@ -2,11 +2,10 @@ package com.java.beipuo.ae2virus.mixin;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.me.cells.BasicCellInventory;
-import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
 import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
+import com.java.beipuo.ae2virus.storage.DataStreamKey;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,8 +23,7 @@ public abstract class BasicCellInventoryMixin {
     @Inject(method = "insert", at = @At("HEAD"), cancellable = true)
     private void ae2virus$onlyVirusCellStoresDataStreams(AEKey what, long amount, Actionable mode,
             IActionSource source, CallbackInfoReturnable<Long> cir) {
-        if (what instanceof AEItemKey itemKey
-                && itemKey.getItem() instanceof DataStreamCapsuleItem
+        if (what instanceof DataStreamKey
                 && !(this.i.getItem() instanceof DataStreamStorageCellItem)) {
             cir.setReturnValue(0L);
         }

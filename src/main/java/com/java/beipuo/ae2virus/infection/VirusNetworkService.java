@@ -12,10 +12,9 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.cells.StorageCell;
 import appeng.api.util.AECableType;
-import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
-import com.java.beipuo.ae2virus.item.DataStreamPayload;
 import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
 import com.java.beipuo.ae2virus.registry.AVItems;
+import com.java.beipuo.ae2virus.storage.DataStreamKey;
 import appeng.parts.AEBasePart;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -511,27 +510,18 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
     private void dropDataStreams() {
         for (T1VirusState virus : this.t1Viruses) {
-            insertDataStream(dataStreamKey(virus.target(), virus.blockedAmount(), virus.level()));
+            insertDataStream(virus.target(), virus.blockedAmount(), virus.level());
         }
         for (T2VirusState virus : this.t2Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+                insertDataStream(entry.getKey(), entry.getValue(), virus.level());
             }
         }
         for (T3VirusState virus : this.t3Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+                insertDataStream(entry.getKey(), entry.getValue(), virus.level());
             }
         }
-    }
-
-    private AEItemKey dataStreamKey(AEKey target, long infectedAmount, int level) {
-        ItemStack stack = new ItemStack(AVItems.DATA_STREAM_CAPSULE.get());
-        IGridNode node = firstTrackedNode();
-        if (node != null) {
-            DataStreamPayload.write(stack, target, infectedAmount, level, node.getLevel().registryAccess());
-        }
-        return AEItemKey.of(stack);
     }
 
     private boolean hasDataStreamStorageCell() {
@@ -559,28 +549,12 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
     }
 
-    private void insertDataStream(AEItemKey key) {
-        long remaining = 1L;
-        for (IGridNode node : this.trackedNodes) {
-            Object owner = node.getOwner();
-            if (!(owner instanceof BlockEntity blockEntity) || !(owner instanceof IChestOrDrive drive)
-                    || blockEntity.getLevel() == null || !drive.isPowered()) {
-                continue;
-            }
-
-            for (int slot = 0; slot < drive.getCellCount(); slot++) {
-                if (!(drive.getCellItem(slot) instanceof DataStreamStorageCellItem)) {
-                    continue;
-                }
-                StorageCell cell = drive.getOriginalCellInventory(slot);
-                if (cell != null) {
-                    remaining -= cell.insert(key, remaining, Actionable.MODULATE, this.actionSource);
-                    if (remaining <= 0L) {
-                        return;
-                    }
-                }
-            }
+    private void insertDataStream(AEKey target, long amount, int level) {
+        DataStreamKey key = DataStreamKey.of(target, level);
+        if (key == null || amount <= 0L) {
+            return;
         }
+        this.storageService.getInventory().insert(key, amount, Actionable.MODULATE, this.actionSource);
     }
 
     private void dropNearNetwork(AEItemKey key, long amount) {
@@ -723,7 +697,6 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         for (Map.Entry<AEKey, Long> entry : cell.storedAmounts().entrySet()) {
             AEKey target = entry.getKey();
             if (target instanceof AEItemKey itemKey
-                    && !(itemKey.getItem() instanceof DataStreamCapsuleItem)
                     && !(itemKey.getItem() instanceof DataStreamStorageCellItem)
                     && entry.getValue() > virus.blockedAmount(target)) {
                 candidates.add(target);
@@ -1167,7 +1140,6 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                     fallbackUsedAmount = saturatedAdd(fallbackUsedAmount, amount);
                 }
                 if (amount > 0 && key instanceof AEItemKey itemKey
-                        && !(itemKey.getItem() instanceof DataStreamCapsuleItem)
                         && !(itemKey.getItem() instanceof DataStreamStorageCellItem)) {
                     amounts.put(key, amount);
                     count++;

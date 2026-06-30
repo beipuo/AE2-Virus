@@ -71,8 +71,6 @@
   "tooltip.ae2virus.virus_terminal.blocked": "封锁数量：%s",
   "tooltip.ae2virus.virus_terminal.experience": "经验：%s",
   "tooltip.ae2virus.virus_terminal.target_id": "目标：%s",
-  "tooltip.ae2virus.data_stream_capsule.empty": "空数据流",
-  "tooltip.ae2virus.data_stream_capsule.target": "目标：%s",
-  "tooltip.ae2virus.data_stream_capsule.amount": "侵染数量：%s",
-  "tooltip.ae2virus.data_stream_capsule.level": "病毒等级：%s"
+  "ae2virus.key_type.data_stream": "数据流",
+  "ae2virus.key.data_stream": "%s 数据流 T%s"
 }

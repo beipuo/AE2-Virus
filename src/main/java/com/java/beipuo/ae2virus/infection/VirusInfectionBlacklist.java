@@ -2,8 +2,8 @@ package com.java.beipuo.ae2virus.infection;
 
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
-import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
 import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
+import com.java.beipuo.ae2virus.registry.AVItems;
 import java.util.Set;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -25,7 +25,7 @@ public final class VirusInfectionBlacklist {
 
     public static boolean contains(Item item) {
         return BLACKLISTED_ITEMS.contains(item)
-                || item instanceof DataStreamCapsuleItem
+                || item == AVItems.DATA_STREAM_CAPSULE.get()
                 || item instanceof DataStreamStorageCellItem;
     }
 

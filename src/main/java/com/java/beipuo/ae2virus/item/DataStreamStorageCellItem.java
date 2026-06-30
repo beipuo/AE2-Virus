@@ -2,7 +2,6 @@ package com.java.beipuo.ae2virus.item;
 
 import appeng.api.config.FuzzyMode;
 import appeng.api.ids.AEComponents;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.storage.cells.IBasicCellItem;
@@ -10,6 +9,8 @@ import appeng.api.upgrades.IUpgradeInventory;
 import appeng.api.upgrades.UpgradeInventories;
 import appeng.items.contents.CellConfig;
 import appeng.util.ConfigInventory;
+import com.java.beipuo.ae2virus.storage.DataStreamKey;
+import com.java.beipuo.ae2virus.storage.DataStreamKeyType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +43,7 @@ public class DataStreamStorageCellItem extends Item implements IBasicCellItem {
 
     @Override
     public AEKeyType getKeyType() {
-        return AEKeyType.items();
+        return DataStreamKeyType.TYPE;
     }
 
     @Override
@@ -62,11 +63,7 @@ public class DataStreamStorageCellItem extends Item implements IBasicCellItem {
 
     @Override
     public boolean isBlackListed(ItemStack cellItem, AEKey requestedAddition) {
-        if (!(requestedAddition instanceof AEItemKey itemKey)) {
-            return true;
-        }
-        return !(itemKey.getItem() instanceof DataStreamCapsuleItem)
-                || !DataStreamPayload.hasPayloadTag(itemKey.getReadOnlyStack());
+        return !(requestedAddition instanceof DataStreamKey);
     }
 
     @Override
@@ -86,7 +83,7 @@ public class DataStreamStorageCellItem extends Item implements IBasicCellItem {
 
     @Override
     public ConfigInventory getConfigInventory(ItemStack is) {
-        return CellConfig.create(Set.of(AEKeyType.items()), is);
+        return CellConfig.create(Set.of(DataStreamKeyType.TYPE), is);
     }
 
     @Override

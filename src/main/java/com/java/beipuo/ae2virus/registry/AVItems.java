@@ -2,7 +2,6 @@ package com.java.beipuo.ae2virus.registry;
 
 import java.util.List;
 import appeng.items.parts.PartItem;
-import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
 import com.java.beipuo.ae2virus.item.DataStreamStorageCellItem;
 import com.java.beipuo.ae2virus.item.VirusStimulatorItem;
 import com.java.beipuo.ae2virus.part.VirusTerminalPart;
@@ -46,9 +45,7 @@ public final class AVItems {
     public static final DeferredItem<Item> DAMAGED_DATA_PACKET = ITEMS.material("damaged_data_packet");
     public static final DeferredItem<Item> CONTAMINATED_ITEM_INDEX = ITEMS.material("contaminated_item_index");
     public static final DeferredItem<Item> DATA_STREAM_SAMPLE = ITEMS.material("data_stream_sample");
-    public static final DeferredItem<DataStreamCapsuleItem> DATA_STREAM_CAPSULE = ITEMS.singleStack(
-            "data_stream_capsule",
-            DataStreamCapsuleItem::new);
+    public static final DeferredItem<Item> DATA_STREAM_CAPSULE = ITEMS.singleStack("data_stream_capsule");
     public static final DeferredItem<DataStreamStorageCellItem> DATA_STREAM_STORAGE_CELL = ITEMS.singleStack(
             "data_stream_storage_cell",
             DataStreamStorageCellItem::new);
