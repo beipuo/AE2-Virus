@@ -1,0 +1,8 @@
+{
+  "type": "ae2virus:virus_breeding",
+  "virus_or_core": {
+    "tag": "ae2virus:virus_breeding_inputs"
+  },
+  "data_stream_amount": 1000,
+  "experience": 1
+}

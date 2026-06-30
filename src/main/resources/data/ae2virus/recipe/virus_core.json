@@ -1,0 +1,13 @@
+{
+  "type": "ae2virus:virus_core_manufacturing",
+  "forming_core": {
+    "item": "ae2:formation_core"
+  },
+  "destruction_core": {
+    "item": "ae2:annihilation_core"
+  },
+  "shell": {
+    "item": "ae2virus:virus_shell"
+  },
+  "data_stream_amount": 1000
+}

@@ -13,7 +13,7 @@ public final class AVCreativeTabs {
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAIN = CREATIVE_TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.ae2virus.main"))
             .withTabsBefore(CreativeModeTabs.FUNCTIONAL_BLOCKS)
-            .icon(AVBlocks.FIREWALL::toStack)
+            .icon(AVBlocks.VIRUS_CORE_MANUFACTURER::toStack)
             .displayItems((parameters, output) -> {
                 AVItems.ITEMS.getEntries().stream()
                         .filter(item -> !AVItems.VIRUS_INFO_ITEMS.contains(item))

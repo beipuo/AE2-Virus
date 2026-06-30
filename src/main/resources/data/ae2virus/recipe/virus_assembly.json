@@ -1,0 +1,9 @@
+{
+  "type": "ae2virus:virus_assembly",
+  "core": {
+    "item": "ae2virus:virus_core"
+  },
+  "shell": {
+    "item": "ae2virus:virus_shell"
+  }
+}
