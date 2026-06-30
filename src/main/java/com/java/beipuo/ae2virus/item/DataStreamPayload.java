@@ -1,6 +1,7 @@
 package com.java.beipuo.ae2virus.item;
 
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.AEItemKey;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -31,7 +32,7 @@ public record DataStreamPayload(AEKey target, long infectedAmount, int virusLeve
         }
 
         AEKey target = AEKey.fromTagGeneric(registries, tag.getCompound(KEY_TARGET));
-        if (target == null) {
+        if (!(target instanceof AEItemKey)) {
             return null;
         }
         return new DataStreamPayload(target, tag.getLong(KEY_INFECTED_AMOUNT),
@@ -40,5 +41,13 @@ public record DataStreamPayload(AEKey target, long infectedAmount, int virusLeve
 
     public static boolean hasPayload(ItemStack stack, HolderLookup.Provider registries) {
         return read(stack, registries) != null;
+    }
+
+    public static boolean hasPayloadTag(ItemStack stack) {
+        CustomData data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        CompoundTag tag = data.copyTag();
+        return tag.contains(KEY_TARGET, Tag.TAG_COMPOUND)
+                && tag.contains(KEY_INFECTED_AMOUNT, Tag.TAG_LONG)
+                && tag.contains(KEY_VIRUS_LEVEL, Tag.TAG_INT);
     }
 }

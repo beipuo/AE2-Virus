@@ -497,29 +497,30 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
     private void handleInfectionDrops() {
         long totalInfectedAmount = totalInfectedAmount();
+        if (hasDataStreamStorageCell()) {
+            dropDataStreams();
+        }
+
         long shellAmount = (long) Math.floor(totalInfectedAmount * 0.01);
         if (shellAmount <= 0L || this.random.nextDouble() >= 0.01) {
             return;
         }
 
         insertOrDrop(AEItemKey.of(AVItems.TARGETED_VIRUS_SHELL.get()), shellAmount);
-        if (hasDataStreamStorageCell()) {
-            dropDataStreams();
-        }
     }
 
     private void dropDataStreams() {
         for (T1VirusState virus : this.t1Viruses) {
-            insertDataStreamOrDrop(dataStreamKey(virus.target(), virus.blockedAmount(), virus.level()));
+            insertDataStream(dataStreamKey(virus.target(), virus.blockedAmount(), virus.level()));
         }
         for (T2VirusState virus : this.t2Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStreamOrDrop(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+                insertDataStream(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
             }
         }
         for (T3VirusState virus : this.t3Viruses) {
             for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStreamOrDrop(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
+                insertDataStream(dataStreamKey(entry.getKey(), entry.getValue(), virus.level()));
             }
         }
     }
@@ -558,7 +559,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         }
     }
 
-    private void insertDataStreamOrDrop(AEItemKey key) {
+    private void insertDataStream(AEItemKey key) {
         long remaining = 1L;
         for (IGridNode node : this.trackedNodes) {
             Object owner = node.getOwner();
@@ -580,7 +581,6 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 }
             }
         }
-        dropNearNetwork(key, remaining);
     }
 
     private void dropNearNetwork(AEItemKey key, long amount) {

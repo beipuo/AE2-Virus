@@ -65,7 +65,8 @@ public class DataStreamStorageCellItem extends Item implements IBasicCellItem {
         if (!(requestedAddition instanceof AEItemKey itemKey)) {
             return true;
         }
-        return !(itemKey.getItem() instanceof DataStreamCapsuleItem);
+        return !(itemKey.getItem() instanceof DataStreamCapsuleItem)
+                || !DataStreamPayload.hasPayloadTag(itemKey.getReadOnlyStack());
     }
 
     @Override
