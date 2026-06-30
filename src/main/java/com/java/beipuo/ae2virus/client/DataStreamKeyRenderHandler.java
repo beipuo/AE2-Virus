@@ -93,8 +93,6 @@ public final class DataStreamKeyRenderHandler implements AEKeyRenderHandler<Data
                 stack.target().getDisplayName()).withStyle(ChatFormatting.WHITE));
         tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.level", stack.virusLevel())
                 .withStyle(ChatFormatting.AQUA));
-        tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.experience", stack.experience())
-                .withStyle(ChatFormatting.YELLOW));
         tooltip.add(Component.translatable("tooltip.ae2virus.virus_terminal.target_id",
                 stack.target().getId().toString()).withStyle(ChatFormatting.DARK_GRAY));
         return tooltip;

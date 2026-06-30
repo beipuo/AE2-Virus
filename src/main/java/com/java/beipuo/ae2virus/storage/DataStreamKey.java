@@ -26,8 +26,7 @@ public final class DataStreamKey extends AEKey {
                     AEItemKey.CODEC.fieldOf("target").forGetter(DataStreamKey::target),
                     Codec.INT.optionalFieldOf("virus_tier", 1).forGetter(DataStreamKey::virusTier),
                     Codec.STRING.optionalFieldOf("t2_kind", "").forGetter(DataStreamKey::t2KindName),
-                    Codec.INT.fieldOf("virus_level").forGetter(DataStreamKey::virusLevel),
-                    Codec.LONG.optionalFieldOf("experience", 0L).forGetter(DataStreamKey::experience))
+                    Codec.INT.fieldOf("virus_level").forGetter(DataStreamKey::virusLevel))
                     .apply(builder, DataStreamKey::of));
     public static final Codec<DataStreamKey> CODEC = MAP_CODEC.codec();
 
@@ -35,52 +34,48 @@ public final class DataStreamKey extends AEKey {
     private final int virusTier;
     private final String t2KindName;
     private final int virusLevel;
-    private final long experience;
     private final PrimaryKey primaryKey;
     private final ResourceLocation id;
     private final int hashCode;
 
-    private DataStreamKey(AEItemKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
+    private DataStreamKey(AEItemKey target, int virusTier, String t2KindName, int virusLevel) {
         this.target = target;
         this.virusTier = Math.max(1, Math.min(3, virusTier));
         this.t2KindName = this.virusTier == 2 ? t2KindName : "";
         this.virusLevel = Math.max(1, virusLevel);
-        this.experience = Math.max(0L, experience);
-        this.primaryKey = new PrimaryKey(target.getPrimaryKey(), this.virusTier, this.t2KindName, this.virusLevel,
-                this.experience);
+        this.primaryKey = new PrimaryKey(target.getPrimaryKey(), this.virusTier, this.t2KindName, this.virusLevel);
         ResourceLocation targetId = target.getId();
         this.id = ResourceLocation.fromNamespaceAndPath(Ae2virus.MODID,
                 "data_stream/" + targetId.getNamespace() + "/" + targetId.getPath() + "/t" + this.virusTier + "/"
-                        + this.t2KindName + "/l" + this.virusLevel + "/e" + this.experience);
+                        + this.t2KindName + "/l" + this.virusLevel);
         this.hashCode = (((31 * target.hashCode() + this.virusTier) * 31 + this.t2KindName.hashCode()) * 31
-                + this.virusLevel) * 31 + Long.hashCode(this.experience);
+                + this.virusLevel);
     }
 
     @Nullable
     public static DataStreamKey of(AEKey target, int virusLevel) {
-        return of(target, 1, "", virusLevel, 0L);
+        return of(target, 1, "", virusLevel);
     }
 
     @Nullable
-    public static DataStreamKey of(AEKey target, int virusTier, @Nullable T2VirusKind t2Kind, int virusLevel,
-            long experience) {
-        return of(target, virusTier, t2Kind == null ? "" : t2Kind.serializedName(), virusLevel, experience);
+    public static DataStreamKey of(AEKey target, int virusTier, @Nullable T2VirusKind t2Kind, int virusLevel) {
+        return of(target, virusTier, t2Kind == null ? "" : t2Kind.serializedName(), virusLevel);
     }
 
     @Nullable
-    public static DataStreamKey of(AEKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
+    public static DataStreamKey of(AEKey target, int virusTier, String t2KindName, int virusLevel) {
         if (target instanceof AEItemKey itemKey) {
-            return of(itemKey, virusTier, t2KindName, virusLevel, experience);
+            return of(itemKey, virusTier, t2KindName, virusLevel);
         }
         return null;
     }
 
     public static DataStreamKey of(AEItemKey target, int virusLevel) {
-        return of(target, 1, "", virusLevel, 0L);
+        return of(target, 1, "", virusLevel);
     }
 
-    public static DataStreamKey of(AEItemKey target, int virusTier, String t2KindName, int virusLevel, long experience) {
-        return new DataStreamKey(target, virusTier, t2KindName, virusLevel, experience);
+    public static DataStreamKey of(AEItemKey target, int virusTier, String t2KindName, int virusLevel) {
+        return new DataStreamKey(target, virusTier, t2KindName, virusLevel);
     }
 
     public AEItemKey target() {
@@ -103,10 +98,6 @@ public final class DataStreamKey extends AEKey {
         return this.virusLevel;
     }
 
-    public long experience() {
-        return this.experience;
-    }
-
     @Override
     public AEKeyType getType() {
         return DataStreamKeyType.TYPE;
@@ -116,7 +107,7 @@ public final class DataStreamKey extends AEKey {
     public AEKey dropSecondary() {
         AEItemKey primaryTarget = this.target.dropSecondary();
         return primaryTarget == this.target ? this
-                : of(primaryTarget, this.virusTier, this.t2KindName, this.virusLevel, this.experience);
+                : of(primaryTarget, this.virusTier, this.t2KindName, this.virusLevel);
     }
 
     @Override
@@ -146,12 +137,10 @@ public final class DataStreamKey extends AEKey {
         data.writeVarInt(this.virusTier);
         data.writeUtf(this.t2KindName);
         data.writeVarInt(this.virusLevel);
-        data.writeVarLong(this.experience);
     }
 
     public static DataStreamKey fromPacket(RegistryFriendlyByteBuf data) {
-        return of(AEItemKey.fromPacket(data), data.readVarInt(), data.readUtf(), data.readVarInt(),
-                data.readVarLong());
+        return of(AEItemKey.fromPacket(data), data.readVarInt(), data.readUtf(), data.readVarInt());
     }
 
     @Override
@@ -194,7 +183,6 @@ public final class DataStreamKey extends AEKey {
         }
         return this.virusTier == other.virusTier
                 && this.virusLevel == other.virusLevel
-                && this.experience == other.experience
                 && this.t2KindName.equals(other.t2KindName)
                 && this.target.equals(other.target);
     }
@@ -207,11 +195,9 @@ public final class DataStreamKey extends AEKey {
     @Override
     public String toString() {
         return "DataStreamKey{target=" + this.target + ", virusTier=" + this.virusTier
-                + ", t2KindName='" + this.t2KindName + "', virusLevel=" + this.virusLevel
-                + ", experience=" + this.experience + '}';
+                + ", t2KindName='" + this.t2KindName + "', virusLevel=" + this.virusLevel + '}';
     }
 
-    private record PrimaryKey(Object targetPrimaryKey, int virusTier, String t2KindName, int virusLevel,
-            long experience) {
+    private record PrimaryKey(Object targetPrimaryKey, int virusTier, String t2KindName, int virusLevel) {
     }
 }

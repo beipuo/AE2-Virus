@@ -114,4 +114,21 @@ class InfectionRiskTest {
         assertTrue(highGrowth > emptyGrowth);
         assertTrue(highGrowth <= (long) CONFIG.spread().maxSpeedMultiplier());
     }
+
+    @Test
+    void stimulationUsesPeakSpreadAndExposureValues() {
+        assertEquals(1, InfectionRisk.stimulatedSpreadIntervalTicks());
+        assertEquals((long) CONFIG.spread().maxSpeedMultiplier(),
+                InfectionRisk.stimulatedSpreadGrowthAmount(CONFIG));
+
+        ExposureStats exposure = InfectionRisk.stimulatedExposureStats(CONFIG);
+        var chances = InfectionRisk.exposureChances(exposure, CONFIG);
+
+        assertTrue(exposure.exposedCableFaces() > 0);
+        assertTrue(exposure.wirelessRangeExposures() > 0);
+        assertTrue(exposure.machineExposureWeight() > 0.0);
+        assertEquals(CONFIG.exposure().maxSuccessChance(), chances.cable(), EPSILON);
+        assertEquals(CONFIG.exposure().maxSuccessChance(), chances.machine(), EPSILON);
+        assertEquals(CONFIG.exposure().maxSuccessChance(), chances.wireless(), EPSILON);
+    }
 }

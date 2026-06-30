@@ -34,6 +34,7 @@ public class Ae2virus {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
+        AVKeyTypes.registerContainerStrategies();
         LOGGER.info("AE2 Virus loaded.");
     }
 }

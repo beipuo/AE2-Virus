@@ -12,6 +12,7 @@
   "item.ae2virus.t2_dedicated_virus": "T2 专一病毒",
   "item.ae2virus.t3_rule_virus": "T3 规则病毒",
   "item.ae2virus.creative_virus": "创造病毒",
+  "item.ae2virus.virus_shell": "病毒外壳",
   "item.ae2virus.data_stream_capsule": "数据流胶囊",
   "item.ae2virus.data_stream_storage_cell": "数据流存储元件",
   "item.ae2virus.antivirus_module": "杀毒模块",
@@ -55,6 +56,9 @@
   "tooltip.ae2virus.virus_terminal.blocked": "封锁数量：%s",
   "tooltip.ae2virus.virus_terminal.experience": "经验：%s",
   "tooltip.ae2virus.virus_terminal.target_id": "目标：%s",
+  "tooltip.ae2virus.data_stream_capsule.empty": "空",
+  "tooltip.ae2virus.data_stream_capsule.contains": "包含：%s",
+  "tooltip.ae2virus.data_stream_capsule.amount": "容量：%s MB",
   "ae2virus.key_type.data_stream": "数据流",
   "ae2virus.key.data_stream": "%s - %s"
 }

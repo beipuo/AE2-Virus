@@ -1,6 +1,14 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "ae2:item/cell_component_1k"
-  }
+    "layer0": "ae2virus:item/data_stream_capsule"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "ae2virus:filled": 1
+      },
+      "model": "ae2virus:item/data_stream_capsule_filled"
+    }
+  ]
 }

@@ -31,8 +31,6 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
@@ -72,16 +70,16 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             return;
         }
 
-        if (this.stimulationTicks > 0) {
-            this.stimulationTicks--;
-        }
+        boolean stimulated = isStimulated();
 
         if (this.ticksUntilRiskCheck > 0) {
             this.ticksUntilRiskCheck--;
+            tickStimulation(stimulated);
             return;
         }
 
-        if (!claimRiskCheckBudget(level)) {
+        if (!stimulated && !claimRiskCheckBudget(level)) {
+            tickStimulation(false);
             return;
         }
 
@@ -90,6 +88,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         runT2RiskCheck();
         runT3RiskCheck();
         this.ticksUntilRiskCheck = nextRiskCheckInterval();
+        tickStimulation(stimulated);
     }
 
     @Override
@@ -238,10 +237,16 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         if (virus == null) {
             this.t1Viruses.add(new T1VirusState(target, 1L, 1L));
             markInfectionChanged();
-            handleInfectionDrops();
-        } else if (growT1Virus(virus) > 0L) {
+            handleInfectionDrops(1L);
+            dropDataStream(target, 1, null, 1);
+        } else {
+            long added = growT1Virus(virus);
+            if (added <= 0L) {
+                return;
+            }
             markInfectionChanged();
-            handleInfectionDrops();
+            handleInfectionDrops(added);
+            dropDataStream(target, 1, null, virus.level());
         }
     }
 
@@ -288,35 +293,35 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             return;
         }
 
-        boolean changed = false;
+        InfectionGrowth growth = null;
         if (this.random.nextBoolean()) {
-            changed = runT2FusionRiskCheck();
-            if (!changed) {
-                changed = runT2SpecializedRiskCheck();
+            growth = runT2FusionRiskCheck();
+            if (growth == null) {
+                growth = runT2SpecializedRiskCheck();
             }
         } else {
-            changed = runT2SpecializedRiskCheck();
-            if (!changed) {
-                changed = runT2FusionRiskCheck();
+            growth = runT2SpecializedRiskCheck();
+            if (growth == null) {
+                growth = runT2FusionRiskCheck();
             }
         }
 
-        if (changed) {
+        if (growth != null) {
             markInfectionChanged();
-            handleInfectionDrops();
+            handleInfectionDrops(growth.amount());
         }
     }
 
-    private boolean runT2FusionRiskCheck() {
+    private InfectionGrowth runT2FusionRiskCheck() {
         List<T1VirusState> seeds = t1SeedViruses();
         if (seeds.size() < 2) {
-            return false;
+            return null;
         }
 
         T1VirusState seed = seeds.get(this.random.nextInt(seeds.size()));
         double conversionChance = InfectionRisk.t2FusionConversionChance(seeds.size(), seed.level(), this.config);
         if (this.random.nextDouble() >= conversionChance) {
-            return false;
+            return null;
         }
 
         List<AEKey> fusionTargets = new ArrayList<>();
@@ -327,45 +332,49 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         T2VirusState virus = t2Virus(T2VirusKind.FUSION, targetId);
         AEKey target = randomT2FusionTarget(virus, fusionTargets);
         if (target == null) {
-            return false;
+            return null;
         }
 
         T2VirusState targetVirus = virus == null ? new T2VirusState(T2VirusKind.FUSION, targetId, 1L) : virus;
-        if (growT2Virus(targetVirus, target) <= 0L) {
-            return false;
+        long added = growT2Virus(targetVirus, target);
+        if (added <= 0L) {
+            return null;
         }
         if (virus == null) {
             this.t2Viruses.add(targetVirus);
         }
-        return true;
+        dropDataStream(target, 2, targetVirus.kind(), targetVirus.level());
+        return new InfectionGrowth(target, added);
     }
 
-    private boolean runT2SpecializedRiskCheck() {
+    private InfectionGrowth runT2SpecializedRiskCheck() {
         T2SpecializedChoice choice = randomT2SpecializedChoice();
         if (choice == null) {
-            return false;
+            return null;
         }
 
         double conversionChance = InfectionRisk.t2SpecializedConversionChance(choice.seedCount(), choice.seedLevel(),
                 this.config);
         if (this.random.nextDouble() >= conversionChance) {
-            return false;
+            return null;
         }
 
         T2VirusState virus = t2Virus(T2VirusKind.SPECIALIZED, choice.tagId());
         AEKey target = randomT2SpecializedTarget(virus, choice.tagId());
         if (target == null) {
-            return false;
+            return null;
         }
 
         T2VirusState targetVirus = virus == null ? new T2VirusState(T2VirusKind.SPECIALIZED, choice.tagId(), 1L) : virus;
-        if (growT2Virus(targetVirus, target) <= 0L) {
-            return false;
+        long added = growT2Virus(targetVirus, target);
+        if (added <= 0L) {
+            return null;
         }
         if (virus == null) {
             this.t2Viruses.add(targetVirus);
         }
-        return true;
+        dropDataStream(target, 2, targetVirus.kind(), targetVirus.level());
+        return new InfectionGrowth(target, added);
     }
 
     private List<T1VirusState> t1SeedViruses() {
@@ -484,37 +493,35 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
             return;
         }
 
-        boolean changed = growExistingT3Virus(cells);
-        if (!changed && !this.t2Viruses.isEmpty()) {
-            changed = runT3ConversionRiskCheck(cells);
+        InfectionGrowth growth = growExistingT3Virus(cells);
+        if (growth == null && !this.t2Viruses.isEmpty()) {
+            growth = runT3ConversionRiskCheck(cells);
         }
 
-        if (changed) {
+        if (growth != null) {
             markInfectionChanged();
-            handleInfectionDrops();
+            handleInfectionDrops(growth.amount());
         }
     }
 
-    private void handleInfectionDrops() {
-        if (hasDataStreamStorageCell()) {
-            dropDataStreams();
-        }
+    private void handleInfectionDrops(long newlyInfectedAmount) {
+        dropVirusShells(newlyInfectedAmount);
     }
 
-    private void dropDataStreams() {
-        for (T1VirusState virus : this.t1Viruses) {
-            insertDataStream(virus.target(), virus.blockedAmount(), 1, null, virus.level(), virus.experience());
+    private void dropVirusShells(long newlyInfectedAmount) {
+        if (newlyInfectedAmount <= 0L) {
+            return;
         }
-        for (T2VirusState virus : this.t2Viruses) {
-            for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(entry.getKey(), entry.getValue(), 2, virus.kind(), virus.level(), virus.experience());
-            }
+
+        long shellAmount = Math.max(1L, newlyInfectedAmount / 100L);
+        insertIntoNetwork(AEItemKey.of(AVItems.VIRUS_SHELL.get()), shellAmount);
+    }
+
+    private void dropDataStream(AEKey target, int tier, T2VirusKind t2Kind, int level) {
+        if (!hasDataStreamStorageCell() || this.random.nextDouble() >= 0.01) {
+            return;
         }
-        for (T3VirusState virus : this.t3Viruses) {
-            for (Map.Entry<AEKey, Long> entry : virus.blockedAmounts().entrySet()) {
-                insertDataStream(entry.getKey(), entry.getValue(), 3, null, virus.level(), virus.experience());
-            }
-        }
+        insertDataStream(target, 1L, tier, t2Kind, level);
     }
 
     private boolean hasDataStreamStorageCell() {
@@ -534,16 +541,12 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         return false;
     }
 
-    private void insertOrDrop(AEItemKey key, long amount) {
-        long remaining = amount - this.storageService.getInventory().insert(key, amount,
-                Actionable.MODULATE, this.actionSource);
-        if (remaining > 0L) {
-            dropNearNetwork(key, remaining);
-        }
+    private void insertIntoNetwork(AEItemKey key, long amount) {
+        this.storageService.getInventory().insert(key, amount, Actionable.MODULATE, this.actionSource);
     }
 
-    private void insertDataStream(AEKey target, long amount, int tier, T2VirusKind t2Kind, int level, long experience) {
-        DataStreamKey key = DataStreamKey.of(target, tier, t2Kind, level, experience);
+    private void insertDataStream(AEKey target, long amount, int tier, T2VirusKind t2Kind, int level) {
+        DataStreamKey key = DataStreamKey.of(target, tier, t2Kind, level);
         if (key == null || amount <= 0L) {
             return;
         }
@@ -558,57 +561,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         return megabytes * DataStreamKeyType.AMOUNT_MB;
     }
 
-    private void dropNearNetwork(AEItemKey key, long amount) {
-        IGridNode node = firstTrackedNode();
-        if (node == null || node.getLevel() == null || node.getLevel().isClientSide()) {
-            return;
-        }
-
-        BlockPos pos = nodePosition(node);
-        List<ItemStack> drops = new ArrayList<>();
-        key.addDrops(amount, drops, node.getLevel(), pos);
-        for (ItemStack stack : drops) {
-            ItemEntity entity = new ItemEntity(node.getLevel(), pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D, stack);
-            node.getLevel().addFreshEntity(entity);
-        }
-    }
-
-    private IGridNode firstTrackedNode() {
-        for (IGridNode node : this.trackedNodes) {
-            if (node != null) {
-                return node;
-            }
-        }
-        return null;
-    }
-
-    private BlockPos nodePosition(IGridNode node) {
-        Object owner = node.getOwner();
-        if (owner instanceof AEBasePart part && part.getBlockEntity() != null) {
-            return part.getBlockEntity().getBlockPos();
-        }
-        if (owner instanceof BlockEntity blockEntity) {
-            return blockEntity.getBlockPos();
-        }
-        return BlockPos.ZERO;
-    }
-
-    private long totalInfectedAmount() {
-        long total = 0L;
-        for (T1VirusState virus : this.t1Viruses) {
-            total = saturatedAdd(total, virus.blockedAmount());
-        }
-        for (T2VirusState virus : this.t2Viruses) {
-            total = saturatedAdd(total, virus.totalBlockedAmount());
-        }
-        for (T3VirusState virus : this.t3Viruses) {
-            total = saturatedAdd(total, virus.totalBlockedAmount());
-        }
-        return total;
-    }
-
-    private boolean growExistingT3Virus(Map<String, T3CellInfo> cells) {
+    private InfectionGrowth growExistingT3Virus(Map<String, T3CellInfo> cells) {
         List<T3VirusState> candidates = new ArrayList<>();
         for (T3VirusState virus : this.t3Viruses) {
             T3CellInfo cell = cells.get(virus.cellId());
@@ -619,31 +572,37 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
         T3VirusState virus = randomT3Virus(candidates);
         if (virus == null) {
-            return false;
+            return null;
         }
-        return growT3Virus(virus, cells.get(virus.cellId())) > 0L;
+        InfectionGrowth growth = growT3Virus(virus, cells.get(virus.cellId()));
+        if (growth != null) {
+            dropDataStream(growth.target(), 3, null, virus.level());
+        }
+        return growth;
     }
 
-    private boolean runT3ConversionRiskCheck(Map<String, T3CellInfo> cells) {
+    private InfectionGrowth runT3ConversionRiskCheck(Map<String, T3CellInfo> cells) {
         double conversionChance = InfectionRisk.t3ConversionChance(t3ConversionRisk(), this.config);
         if (this.random.nextDouble() >= conversionChance) {
-            return false;
+            return null;
         }
 
         T3CellInfo cell = randomT3Cell(cells);
         if (cell == null) {
-            return false;
+            return null;
         }
 
         T3VirusState virus = t3Virus(cell.cellId());
         T3VirusState targetVirus = virus == null ? new T3VirusState(cell.cellId(), 1L) : virus;
-        if (growT3Virus(targetVirus, cell) <= 0L) {
-            return false;
+        InfectionGrowth growth = growT3Virus(targetVirus, cell);
+        if (growth == null) {
+            return null;
         }
         if (virus == null) {
             this.t3Viruses.add(targetVirus);
         }
-        return true;
+        dropDataStream(growth.target(), 3, null, targetVirus.level());
+        return growth;
     }
 
     private double t3ConversionRisk() {
@@ -666,16 +625,16 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 0L, 1.0, 0L, 1.0, 0L, 1.0, 0L, 1.0, 0L, 1.0, this.config);
     }
 
-    private long growT3Virus(T3VirusState virus, T3CellInfo cell) {
+    private InfectionGrowth growT3Virus(T3VirusState virus, T3CellInfo cell) {
         AEKey target = randomCandidate(t3SusceptibleTargets(cell, virus));
         if (target == null) {
-            return 0L;
+            return null;
         }
 
         long storedAmount = cell.storedAmount(target);
         long currentBlocked = virus.blockedAmount(target);
         if (currentBlocked >= storedAmount) {
-            return 0L;
+            return null;
         }
 
         long room = storedAmount - currentBlocked;
@@ -686,11 +645,11 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
                 this.random,
                 this.config);
         if (roll.result() != InfectionRoll.Result.SUCCESS) {
-            return 0L;
+            return null;
         }
 
         long added = Math.min(room, growth);
-        return virus.addBlockedAmount(target, added) ? added : 0L;
+        return virus.addBlockedAmount(target, added) ? new InfectionGrowth(target, added) : null;
     }
 
     private List<AEKey> t3SusceptibleTargets(T3CellInfo cell, T3VirusState virus) {
@@ -806,7 +765,7 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
 
     private int nextRiskCheckInterval() {
         if (isStimulated()) {
-            return 1;
+            return InfectionRisk.stimulatedSpreadIntervalTicks();
         }
         int baseInterval = this.config.runtime().riskCheckIntervalTicks();
         long infectedAmount = t1InfectedAmount();
@@ -819,24 +778,24 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
         if (!isStimulated()) {
             return InfectionRisk.spreadGrowthAmount(infectedAmount, virusLevel, this.config);
         }
-        return Math.max(1L, (long) Math.floor(this.config.spread().maxSpeedMultiplier()));
+        return InfectionRisk.stimulatedSpreadGrowthAmount(this.config);
     }
 
     private ExposureStats activeExposureStats() {
         if (!isStimulated()) {
             return this.riskCache.exposureStats();
         }
-        return new ExposureStats(0, 0, boostedExposurePressure());
-    }
-
-    private double boostedExposurePressure() {
-        double maxSuccessChance = this.config.exposure().maxSuccessChance();
-        double clamped = Math.max(0.000001, Math.min(0.999999, maxSuccessChance));
-        return -Math.log(1.0 - clamped) * this.config.exposure().scale();
+        return InfectionRisk.stimulatedExposureStats(this.config);
     }
 
     private boolean isStimulated() {
         return this.stimulationTicks > 0;
+    }
+
+    private void tickStimulation(boolean wasStimulated) {
+        if (wasStimulated) {
+            this.stimulationTicks--;
+        }
     }
 
     private long t1InfectedAmount() {
@@ -1127,6 +1086,9 @@ public final class VirusNetworkService implements IVirusNetworkService, IGridSer
     }
 
     private record T2SpecializedChoice(ResourceLocation tagId, int seedCount, int susceptibleCount, int seedLevel) {
+    }
+
+    private record InfectionGrowth(AEKey target, long amount) {
     }
 
     private record T3CellInfo(String cellId, Map<AEKey, Long> storedAmounts, long usedAmount) {

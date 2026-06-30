@@ -5,6 +5,7 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.me.storage.NetworkStorage;
 import com.java.beipuo.ae2virus.infection.VirusNetworkStorageGuards;
+import com.java.beipuo.ae2virus.storage.DataStreamKey;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,6 +16,10 @@ public abstract class NetworkStorageMixin {
     @Inject(method = "extract", at = @At("HEAD"), cancellable = true)
     private void ae2virus$blockInfectedNetworkExtraction(AEKey what, long amount, Actionable mode,
             IActionSource source, CallbackInfoReturnable<Long> cir) {
+        if (what instanceof DataStreamKey) {
+            return;
+        }
+
         long allowedAmount = VirusNetworkStorageGuards.allowedExtraction((NetworkStorage) (Object) this, what, amount);
         if (allowedAmount <= 0) {
             cir.setReturnValue(0L);

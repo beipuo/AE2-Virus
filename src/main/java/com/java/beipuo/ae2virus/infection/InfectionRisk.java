@@ -137,6 +137,22 @@ public final class InfectionRisk {
         return Math.max(1L, (long) Math.floor(multiplier));
     }
 
+    public static int stimulatedSpreadIntervalTicks() {
+        return 1;
+    }
+
+    public static long stimulatedSpreadGrowthAmount(InfectionConfig config) {
+        return Math.max(1L, (long) Math.floor(config.spread().maxSpeedMultiplier()));
+    }
+
+    public static ExposureStats stimulatedExposureStats(InfectionConfig config) {
+        double pressure = exposurePressureForChance(config.exposure().maxSuccessChance(), config);
+        return new ExposureStats(
+                pressureToCount(pressure, config.exposure().cableFaceWeight()),
+                pressureToCount(pressure, config.exposure().wirelessRangeWeight()),
+                pressure);
+    }
+
     public static InfectionRoll roll(double attemptChance, ExposureStats exposure, RandomSource random,
             InfectionConfig config) {
         double attempt = ProbabilityCurves.clamp(attemptChance, 0.0, 1.0);
@@ -156,6 +172,18 @@ public final class InfectionRisk {
         InfectionConfig.Exposure exposure = config.exposure();
         double saturated = ProbabilityCurves.expSaturation(exposurePressure, exposure.scale());
         return ProbabilityCurves.clamp(saturated, 0.0, exposure.maxSuccessChance());
+    }
+
+    private static double exposurePressureForChance(double chance, InfectionConfig config) {
+        double clamped = ProbabilityCurves.clamp(chance, 0.000001, 0.999999);
+        return -Math.log(1.0 - clamped) * config.exposure().scale();
+    }
+
+    private static int pressureToCount(double pressure, double weight) {
+        if (pressure <= 0.0 || weight <= 0.0) {
+            return 0;
+        }
+        return Math.max(1, (int) Math.ceil(pressure / weight));
     }
 
     private static double virusLevelMultiplier(int virusLevel) {

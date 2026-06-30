@@ -2,9 +2,13 @@ package com.java.beipuo.ae2virus.mixin.client;
 
 import appeng.client.gui.me.common.MEStorageScreen;
 import appeng.client.gui.me.common.RepoSlot;
+import appeng.helpers.InventoryAction;
 import appeng.menu.me.common.GridInventoryEntry;
 import com.java.beipuo.ae2virus.client.infection.ClientVirusState;
+import com.java.beipuo.ae2virus.item.DataStreamCapsuleItem;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,5 +27,29 @@ public abstract class MEStorageScreenMixin {
         if (entry != null && ClientVirusState.blockedAmount(entry.getWhat()) > 0L) {
             guiGraphics.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, 0x99A0A0A0);
         }
+    }
+
+    @Inject(method = "handleGridInventoryEntryMouseClick", at = @At("HEAD"), cancellable = true)
+    private void ae2virus$emptyDataStreamCapsule(GridInventoryEntry entry, int mouseButton, ClickType clickType,
+            CallbackInfo ci) {
+        var menu = ((MEStorageScreen<?>) (Object) this).getMenu();
+        if (mouseButton != 1 || menu.getCarried().isEmpty()) {
+            return;
+        }
+
+        var player = Minecraft.getInstance().player;
+        if (player == null) {
+            return;
+        }
+
+        var key = DataStreamCapsuleItem.getDataStream(menu.getCarried(), player.level().registryAccess());
+        if (key == null || !menu.isKeyVisible(key)) {
+            return;
+        }
+
+        menu.handleInteraction(-1, clickType == ClickType.QUICK_MOVE
+                ? InventoryAction.EMPTY_ENTIRE_ITEM
+                : InventoryAction.EMPTY_ITEM);
+        ci.cancel();
     }
 }
